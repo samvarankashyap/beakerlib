@@ -190,7 +190,7 @@ rlJournalEnd(){
     fi
     local journal="$BEAKERLIB_JOURNAL"
     local journaltext="$BEAKERLIB_DIR/journal.txt"
-    rlJournalPrintText > $journaltext
+    #rlJournalPrintText > $journaltext
 
 
     if [ -z "$BEAKERLIB_COMMAND_SUBMIT_LOG" ]
@@ -202,8 +202,9 @@ rlJournalEnd(){
         $BEAKERLIB_COMMAND_SUBMIT_LOG -T $TESTID -l $journal \
         || rlLogError "rlJournalEnd: Submit wasn't successful"
     else
-        rlLog "JOURNAL XML: $journal"
-        rlLog "JOURNAL TXT: $journaltext"
+        rlLogText "JOURNAL META: $BEAKERLIB_METAFILE" LOG
+        rlLogText "JOURNAL XML: $journal" LOG
+        rlLogText "JOURNAL TXT: $journaltext" LOG
     fi
 
     echo "#End of metafile" >> $BEAKERLIB_METAFILE
@@ -410,7 +411,7 @@ rlGetPhaseState(){
 rljAddPhase(){
     local MSG=${2:-"Phase of $1 type"}
     rlLogDebug "rljAddPhase: Phase $MSG started"
-    rljWriteToMetafile phase --name="$MSG" --type="$1" >&2
+    rljWriteToMetafile phase --name "$MSG" --type "$1" >&2
     # Printing
     rljPrintHeadLog "$MSG"
 
@@ -450,7 +451,7 @@ rljClosePhase(){
     CURRENT_PHASE_NAME=""
     CURRENT_PHASE_TESTS_FAILED=0
     # Updating phase element
-    rljWriteToMetafile --result="$result" --score="$score"
+    rljWriteToMetafile --result "$result" --score "$score"
 }
 
 # $1 message
@@ -459,17 +460,16 @@ rljClosePhase(){
 rljAddTest(){
     if [ "$PHASE_OPENED" -eq 0 ]; then
         rljAddPhase "FAIL" "Asserts collected outside of a phase"
-        rljWriteToMetafile test --message="TEST BUG: Assertion not in phase" -- "FAIL" >&2
-        rljPrintLog "TEST BUG: Assertion not in phase" "FAIL"
-        rljWriteToMetafile test --message="$1" -- "$2" >&2
-        rljPrintLog "$1" "$2"
+        rljWriteToMetafile test --message "TEST BUG: Assertion not in phase" -- "FAIL" >&2
+        rlLogText "TEST BUG: Assertion not in phase" "FAIL"
+        rljWriteToMetafile test --message "$1" -- "$2" >&2
+        rlLogText "$1" "$2"
         rljClosePhase
         # MEETING check logic of adding failed test to both current phase and overall counter
         TESTS_FAILED=TESTS_FAILED+1
         CURRENT_PHASE_TESTS_FAILED=CURRENT_PHASE_TESTS_FAILED+1
     else
-        rljWriteToMetafile test --message="$1" -- "$2" ${3:+--command="$3"} >&2
-        rljPrintLog "$1" "$2"
+        rljWriteToMetafile test --message "$1" ${3:+--command "$3"} -- "$2" >&2
         if [ "$2" != "PASS" ]; then
             TESTS_FAILED=TESTS_FAILED+1
             CURRENT_PHASE_TESTS_FAILED=CURRENT_PHASE_TESTS_FAILED+1
@@ -487,17 +487,17 @@ rljAddMetric(){
         return 1
     fi
     rlLogDebug "rljAddMetric: Storing metric $MID with value $VALUE and tolerance $TOLERANCE"
-    rljWriteToMetafile metric --type="$1" --name="$MID" \
+    rljWriteToMetafile metric --type "$1" --name "$MID" \
         --value="$VALUE" --tolerance="$TOLERANCE" >&2
     return $?
 }
 
 rljAddMessage(){
-    rljWriteToMetafile message --message="$1" --severity="$2" >&2
+    rljWriteToMetafile message --message "$1" --severity "$2" >&2
 }
 
 rljRpmLog(){
-    #rljWriteToMetafile rpm --package="$1" >&2
+    #rljWriteToMetafile rpm --package "$1" >&2
 
     # TODO probably runs again pointlessly, it should be enough to have it run in header-creation and save it into global
     package=$(rljDeterminePackage)
@@ -532,7 +532,7 @@ rljGetPackageDetails(){
             rljWriteToMetafile pkgnotinstalled -- "$1"
         else
             srcrpm=$(rljGetSRCRPM $1)
-            rljWriteToMetafile pkgdetails --sourcerpm="$srcrpm" -- "$rpm"
+            rljWriteToMetafile pkgdetails --sourcerpm "$srcrpm" -- "$rpm"
         fi
     fi
     return 0
@@ -604,7 +604,7 @@ rljCreateHeader(){
         while read line; do
             if [[ "$line" =~ $cpu_regex ]]; then    # MEETING bash construct, is it ok?
                 type="${BASH_REMATCH[1]}"
-                count=count+1
+                let count++
             fi
         done < "/proc/cpuinfo"
         rljWriteToMetafile hw_cpu -- "$count x $type"
@@ -642,88 +642,70 @@ rljCreateHeader(){
 }
 
 
+__INTERNAL_jHash() {
+  echo -n "$1" | base64 -w 0
+}
+
+
 # Encode arguments' values into base64
 # Adds --timestamp argument and indent
 # writes it into metafile
+# takes [element] --attribute1 value1 --attribute2 value2 .. [-- "content"]
 rljWriteToMetafile(){
-    CONTENT_FLAG=0
-    attr_regex="^--[a-zA-Z0-9]+="
-    content_regex="^--$"
-    line=""
+    local timestamp indent
+    printf -v timestamp '%(%s)T' -1
+    local line=""
+    local lineraw=''
+    local ARGS=("$@")
+    #set | grep ^ARGS=
+    local element=''
 
-    for arg in "$@"; do
-        if [ "$CONTENT_FLAG" -eq 1 ]; then
-            based=$(echo -n "$arg" | base64 -w 0)
-            line="$line\"$based\" "
-            CONTENT_FLAG=0
-            continue
-        elif [[ "$arg" =~ $content_regex ]]; then
-            CONTENT_FLAG=1
-            line="$line$arg "
-            continue
-        elif [[ "$arg" =~ $attr_regex ]]; then
-            arrArg=(${arg//=/ })
-            based=$(echo -n "${arrArg[@]: 1}" | base64 -w 0)  # TODO_IMP check if working in older versions of bash
-            based="${arrArg[0]}=\"$based\""
-            line="$line$based "
-        else
-            line="$line$arg "
-        fi
+    [[ "${1:0:2}" != "--" ]] && {
+      local element="$1"
+      shift
+    }
+    local arg
+    while [[ $# -gt 0 ]]; do
+      #echo "$1"
+      case $1 in
+      --)
+        line+=" -- \"$(echo -n "$2" | base64 -w 0)\""
+        lineraw+=" -- \"$2\""
+        shift 2
+        break
+        ;;
+      --*)
+        line+=" $1=\"$(echo -n "$2" | base64 -w 0)\""
+        lineraw+=" $1=\"$2\""
+        shift
+        ;;
+      *)
+        rlLogText "unexpected meta input format"
+        set | grep ^ARGS=
+        exit 124
+        ;;
+      esac
+      shift
     done
+    [[ $# -gt 0 ]] && {
+      rlLogText "unexpected meta input format"
+      set | grep ^ARGS=
+      exit 125
+    }
 
-    if [ $INDENT_LEVEL -eq 0 ]; then
-        indent=""
-    else
-        indent=$(printf '%0.s ' $(seq 1 "$INDENT_LEVEL"))
-    fi
+    printf -v indent '%*s' $INDENT_LEVEL
 
-    timestamp=$(date +%s)
-    line="$indent$line--timestamp=\"$timestamp\""
+    line="$indent${element:+$element }--timestamp=\"$timestamp\"$line"
+    lineraw="$indent${element:+$element }--timestamp=\"$timestamp\"$lineraw"
+    #echo "#${lineraw:1}" >&2
+    #echo "#${lineraw:1}" >> $BEAKERLIB_METAFILE
     echo "$line" >> $BEAKERLIB_METAFILE
 }
 
-# Printing to stdout
-rljPrintLog(){
-    # $1 message
-    # $2 PREFIX
-    [ -z "$2" ] && PREFIX="LOG" || PREFIX="$2"
-    COLOR=""
-    UNCOLOR=""
-
-    if [ "$TTY" -eq 1 ]; then
-        if [ "$PREFIX" == "PASS" ]; then
-            COLOR="\033[0;32m"
-            UNCOLOR="\033[0m"
-        elif [ "$PREFIX" == "FAIL" ]; then
-            COLOR="\033[0;31m"
-            UNCOLOR="\033[0m"
-        elif [ "$PREFIX" == "INFO" ]; then
-            COLOR="\033[0;34m"
-            UNCOLOR="\033[0m"
-        elif [ "$PREFIX" == "WARNING" ]; then
-            COLOR="\033[0;33m"
-            UNCOLOR="\033[0m"
-        fi
-    fi
-
-    # Actual printing, split by newline
-    echo "$1" | while read line
-    do
-        # Padding with spaces
-        PREFIX_LEN=${#PREFIX}
-        lnum="$(( (10 - $PREFIX_LEN) / 2 ))"
-        rnum="$(( (11 - $PREFIX_LEN) / 2 ))"
-        lpad=$(printf '%0.s ' $(seq 1 "$lnum"))
-        rpad=$(printf '%0.s ' $(seq 1 "$rnum"))
-
-        echo -e ":: [$lpad$COLOR$PREFIX$UNCOLOR$rpad] :: $line"
-    done
-}
-
 rljPrintHeadLog(){
-    echo -e "\n::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::"
-    rljPrintLog "$1"
-    echo -e "::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::\n"
+    rlLogText "\n::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::"
+    rlLogText "$1" LOG
+    rlLogText "::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::\n"
 }
 
 # MEETING Do we want to write metafile parser? Other option would be to use xml - eg the same way how it
@@ -732,10 +714,10 @@ rljPrintHeadLog(){
 # MEETING Use already initialized variables from header or get them again? if again then rename
 rljPrintTestProtocol(){
     rljPrintHeadLog "TEST PROTOCOL"
-    rljPrintLog "Package       : $package"
-    rljPrintLog "Installed     : $(rljGetRPM "$package")"
-    rljPrintLog "beakerlib RPM : $beakerlib_rpm"
-    rljPrintLog "bl-redhat RPM : $beakerlib_redhat_rpm"
+    rlLogText "Package       : $package"
+    rlLogText "Installed     : $(rljGetRPM "$package")"
+    rlLogText "beakerlib RPM : $beakerlib_rpm"
+    rlLogText "bl-redhat RPM : $beakerlib_redhat_rpm"
 
     STARTTIME=""
     ENDTIME=""
@@ -744,25 +726,25 @@ rljPrintTestProtocol(){
     metafile=$(cat "$BEAKERLIB_METAFILE")
 
     # Getting first and last timestamp from metafile
-    while read -r line
-    do
-        if [[ "$line" =~ --timestamp=\"(.*)\" ]]; then
-            if [ "$STARTTIME" == "" ]; then
-                STARTTIME="${BASH_REMATCH[1]}"
-            fi
-            ENDTIME="${BASH_REMATCH[1]}"
-        fi
-    done < <(echo "$metafile")
+    #while read -r line
+    #do
+    #    if [[ "$line" =~ --timestamp=\"(.*)\" ]]; then
+    #        if [ "$STARTTIME" == "" ]; then
+    #            STARTTIME="${BASH_REMATCH[1]}"
+    #        fi
+    #        ENDTIME="${BASH_REMATCH[1]}"
+    #    fi
+    #done < <(echo "$metafile")
 
     STARTTIME=$(date -d "@$STARTTIME" '+%Y-%m-%d %H:%M:%S %Z')
     ENDTIME=$(date -d "@$ENDTIME" '+%Y-%m-%d %H:%M:%S %Z')
 
-    rljPrintLog "Test started  : $STARTTIME"
-    rljPrintLog "Test finished : $ENDTIME"
-    rljPrintLog "Test name     : $TEST"
-    rljPrintLog "Distro        : $release"
-    rljPrintLog "Hostname      : $hostname"
-    rljPrintLog "Architecture  : $arch"
+    rlLogText "Test started  : $STARTTIME"
+    rlLogText "Test finished : $ENDTIME"
+    rlLogText "Test name     : $TEST"
+    rlLogText "Distro        : $release"
+    rlLogText "Hostname      : $hostname"
+    rlLogText "Architecture  : $arch"
 
     rljPrintHeadLog "Test description"
     echo "$purpose"
