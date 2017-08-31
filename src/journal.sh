@@ -67,7 +67,8 @@ functionality.
 =cut
 
 # Initialization of variables holding current state of the test
-# MEETING rename all vars to BEAKERLIB_... to prevent overwriting them in test?
+# TODO: rename to __INTERNAL_
+# TODO: remove declare, use let instead, some variables will be an array
 declare -i INDENT_LEVEL; INDENT_LEVEL=0
 declare -i PHASE_OPENED; PHASE_OPENED=0
 declare -i PHASES_FAILED; PHASES_FAILED=0
@@ -94,6 +95,7 @@ rlJournalStart(){
     [ -d "$BEAKERLIB_DIR" ] || mkdir -p "$BEAKERLIB_DIR"
 
     # set global BeakerLib journal and queue file variable for future use
+    # TODO: BEAKERLIB_METAFILE user-defined with default 
     export BEAKERLIB_JOURNAL="$BEAKERLIB_DIR/journal.xml"
     export BEAKERLIB_METAFILE="$BEAKERLIB_DIR/journal.meta"
 
@@ -106,14 +108,6 @@ rlJournalStart(){
         echo "rlJournalStart: Cannot continue, exiting..."
         exit 1
     fi
-
-    # finally initialize the journal # MEETING SMAZAT ?
-#    if $__INTERNAL_JOURNALIST init --test "$TEST" >&2; then
-#        rlLogDebug "rlJournalStart: Journal successfully initilized in $BEAKERLIB_DIR"
-#    else
-#        echo "rlJournalStart: Failed to initialize the journal. Bailing out..."
-#        exit 1
-#    fi
 
     # Create Header for XML journal
     rljCreateHeader
@@ -190,6 +184,7 @@ rlJournalEnd(){
     fi
     local journal="$BEAKERLIB_JOURNAL"
     local journaltext="$BEAKERLIB_DIR/journal.txt"
+    # this should not be needed as the text form should be generated continueousely by rlLogText
     #rlJournalPrintText > $journaltext
 
 
@@ -267,13 +262,12 @@ Example:
 
 =cut
 
-# TODO_IMP implement with metafile solution
+# cat generated text version
 rlJournalPrint(){
     local TYPE=${1:-"pretty"}
     $__INTERNAL_JOURNALIST dump --type "$TYPE"
 }
 
-# TODO_IMP implement with metafile solution
 # backward compatibility
 rlPrintJournal() {
     rlLogWarning "rlPrintJournal is obsoleted by rlJournalPrint"
@@ -342,7 +336,7 @@ Example:
     :: [   PASS   ] :: RESULT: Test
 
 =cut
-# TODO_IMP implement with metafile solution
+# call rlJournalPrint
 rlJournalPrintText(){
     # TODO temporary fix
     rljPrintTestProtocol
@@ -376,8 +370,7 @@ Returns number of failed asserts in so far, 255 if there are more then 255 failu
 =cut
 
 rlGetTestState(){
-    #$__INTERNAL_JOURNALIST teststate >&2
-    # TODO_IMP implement overflow for all counters (maybe increment/decrement function?)
+    # use ECODE for real state, return 255 at max
     ECODE="$TESTS_FAILED"
     rlLogDebug "rlGetTestState: $ECODE failed assert(s) in test"
     return $ECODE
@@ -397,8 +390,7 @@ Returns number of failed asserts in current phase so far, 255 if there are more 
 =cut
 
 rlGetPhaseState(){
-    #$__INTERNAL_JOURNALIST phasestate >&2
-    #ECODE=$?
+    # use ECODE for real state, return 255 at max
     ECODE="$CURRENT_PHASE_TESTS_FAILED"
     rlLogDebug "rlGetPhaseState: $ECODE failed assert(s) in phase"
     return $ECODE
@@ -415,17 +407,15 @@ rljAddPhase(){
     # Printing
     rljPrintHeadLog "$MSG"
 
-    # MEETING Can't PHASE_OPENED be deduced from INDENT_LEVEL? Or will there be other elements increasing indent?
-    # MEETING For nested phases to work CURRENT_PHASE_TYPE/NAME has to be implemented as stacks, other than that
-    # MEETING ...it seems beakerlib is ready, don't know about Beaker though.
-    PHASE_OPENED=PHASE_OPENED+1
     INDENT_LEVEL=INDENT_LEVEL+1
-    CURRENT_PHASE_TYPE="$1"
-    CURRENT_PHASE_NAME="$MSG"
-
+    CURRENT_PHASE_TYPE=( "$1" "${CURRENT_PHASE_TYPE[@]}" )
+    CURRENT_PHASE_NAME=( "$MSG" "${CURRENT_PHASE_NAME[@]}" )
+    PHASE_OPENED=${#CURRENT_PHASE_NAME[@]}
+    CURRENT_PHASE_TESTS_FAILED=( 0 "${CURRENT_PHASE_TESTS_FAILED[@]}" )
 }
 
 rljClosePhase(){
+  # TODO: check opened
     local logfile="$BEAKERLIB_DIR/journal.txt"
 
     local score="$CURRENT_PHASE_TESTS_FAILED"
@@ -445,11 +435,12 @@ rljClosePhase(){
     rlReport "$name" "$result" "$score" "$logfile"
 
     # Reset of state variables
-    PHASE_OPENED=PHASE_OPENED-1
     INDENT_LEVEL=INDENT_LEVEL-1
-    CURRENT_PHASE_TYPE=""
-    CURRENT_PHASE_NAME=""
-    CURRENT_PHASE_TESTS_FAILED=0
+    unset CURRENT_PHASE_TYPE[0]; CURRENT_PHASE_TYPE=( "${CURRENT_PHASE_TYPE[@]}" )
+    uset CURRENT_PHASE_NAME[0]; CURRENT_PHASE_NAME=( "${CURRENT_PHASE_NAME[@]}" )
+    # TODO: implement nested phase failes count, child phase increases parent
+    # CURRENT_PHASE_TESTS_FAILED=0
+    PHASE_OPENED=${#CURRENT_PHASE_NAME[@]}
     # Updating phase element
     rljWriteToMetafile --result "$result" --score "$score"
 }
@@ -465,7 +456,6 @@ rljAddTest(){
         rljWriteToMetafile test --message "$1" -- "$2" >&2
         rlLogText "$1" "$2"
         rljClosePhase
-        # MEETING check logic of adding failed test to both current phase and overall counter
         TESTS_FAILED=TESTS_FAILED+1
         CURRENT_PHASE_TESTS_FAILED=CURRENT_PHASE_TESTS_FAILED+1
     else
@@ -500,7 +490,7 @@ rljRpmLog(){
     #rljWriteToMetafile rpm --package "$1" >&2
 
     # TODO probably runs again pointlessly, it should be enough to have it run in header-creation and save it into global
-    package=$(rljDeterminePackage)
+    package="$1"
     # MEETING Anyway, is this needed at all? Why does every phase have pkgdetails again when it is in the header?
     # Write package details (rpm, srcrpm) into metafile
     rljGetPackageDetails $package
@@ -524,6 +514,8 @@ rljGetSRCRPM() {
 }
 
 # TODO comment
+# TODO: rename funtion to match what it actually does
+# TODO: should be intrenal, maybe replaced bu __INTERNAL_rpmGetPackageInfo
 rljGetPackageDetails(){
     # RPM and SRCRPM version of the package
     if [ "$1" != "unknown" ]; then
@@ -539,6 +531,7 @@ rljGetPackageDetails(){
 }
 
 # TODO comment
+# TODO: rename to _INTERNAL_
 rljDeterminePackage(){
     if [ "$PACKAGE" == "" ]; then
         if [ "$TEST" == "" ]; then
@@ -708,10 +701,7 @@ rljPrintHeadLog(){
     rlLogText "::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::\n"
 }
 
-# MEETING Do we want to write metafile parser? Other option would be to use xml - eg the same way how it
-# MEETING ...was implemented in original solution - advantage already written, bunch of otherwise useless
-# MEETING ...code will have to be imported to dum_journalling.py
-# MEETING Use already initialized variables from header or get them again? if again then rename
+# TODO: will be completely rewritten using coninueously generated log file
 rljPrintTestProtocol(){
     rljPrintHeadLog "TEST PROTOCOL"
     rlLogText "Package       : $package"

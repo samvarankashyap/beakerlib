@@ -52,6 +52,7 @@ Implements also phase support with automatic assert evaluation.
 # Internal Stuff
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+# TODO: rename back to __INTERNAL_
 rlLogText() {
     local MESSAGE=${1:-"***BAD BEAKERLIB_HLOG CALL***"}
     local prio="$2"
