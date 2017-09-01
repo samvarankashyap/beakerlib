@@ -1,6 +1,6 @@
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #
-#   Name: journalling.sh - part of the BeakerLib project
+#   Name: journal.sh - part of the BeakerLib project
 #   Description: Journalling functionality
 #
 #   Author: Petr Muller <pmuller@redhat.com>
@@ -82,10 +82,9 @@ rlJournalStart(){
 
     [ -d "$BEAKERLIB_DIR" ] || mkdir -p "$BEAKERLIB_DIR"
 
-    # set global BeakerLib journal and queue file variable for future use
-    # TODO: BEAKERLIB_METAFILE user-defined with default 
-    export BEAKERLIB_JOURNAL="$BEAKERLIB_DIR/journal.xml"
-    export BEAKERLIB_METAFILE="$BEAKERLIB_DIR/journal.meta"
+    # unless already set by user set global BeakerLib journal and meta file variables
+    [ -z "$BEAKERLIB_JOURNAL" ] && export BEAKERLIB_JOURNAL="$BEAKERLIB_DIR/journal.xml"
+    [ -z "$BEAKERLIB_METAFILE" ] && export BEAKERLIB_METAFILE="$BEAKERLIB_DIR/journal.meta"
 
     # creating queue file
     touch $BEAKERLIB_METAFILE
@@ -207,7 +206,7 @@ rlJournalEnd(){
     fi
 
     echo "#End of metafile" >> $BEAKERLIB_METAFILE
-    $__INTERNAL_JOURNALIST --metafile "$BEAKERLIB_METAFILE"
+    $__INTERNAL_JOURNALIST --metafile "$BEAKERLIB_METAFILE" --journal "$BEAKERLIB_JOURNAL"
 
 }
 
