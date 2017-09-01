@@ -66,18 +66,6 @@ functionality.
 
 =cut
 
-# Initialization of variables holding current state of the test
-# TODO: rename to __INTERNAL_
-# TODO: remove declare, use let instead, some variables will be an array
-declare -i INDENT_LEVEL; INDENT_LEVEL=0
-declare -i PHASE_OPENED; PHASE_OPENED=0
-declare -i PHASES_FAILED; PHASES_FAILED=0
-declare -i TESTS_FAILED; TESTS_FAILED=0
-declare -i CURRENT_PHASE_TESTS_FAILED; CURRENT_PHASE_TESTS_FAILED=0
-CURRENT_PHASE_TYPE=""
-CURRENT_PHASE_NAME=""
-[ -t 1 ] && TTY=1 || TTY=0
-
 rlJournalStart(){
     # test-specific temporary directory for journal/metadata
     if [ -n "$BEAKERLIB_DIR" ]; then
@@ -109,13 +97,28 @@ rlJournalStart(){
         exit 1
     fi
 
-    # Create Header for XML journal
-    rljCreateHeader
-    # Create log element for XML journal
-    rljWriteToMetafile log
+    # Initialization of variables holding current state of the test
+    # TODO: rename to __INTERNAL_
+    export INDENT_LEVEL=0
+    CURRENT_PHASE_TYPE=()
+    CURRENT_PHASE_NAME=()
+    export __INTERNAL_PRESISTENT_DATA="$BEAKERLIB_DIR/PersistentData"
+    export JOURNAL_OPEN=''
+    __INTERNAL_PersistentDataLoad
+    export PHASES_FAILED=0
+    export TESTS_FAILED=0
+    CURRENT_PHASE_TESTS_FAILED=()
+    export PHASE_OPENED=0
+
+    if [[ -z "$JOURNAL_OPEN" ]]; then
+      # Create Header for XML journal
+      rljCreateHeader
+      # Create log element for XML journal
+      rljWriteToMetafile log
+    fi
+    JOURNAL_OPEN=1
     # Increase level of indent
-    #let "INDENT_LEVEL=INDENT_LEVEL+1"
-    INDENT_LEVEL=INDENT_LEVEL+1  # MEETING another bash construct?
+    INDENT_LEVEL=1
 
     # display a warning message if run in POSIX mode
     if [ $POSIXFIXED == "YES" ] ; then
@@ -141,6 +144,7 @@ rlJournalStart(){
     else
         rlLogError "rlJournalStart: Failed to set up cleanup infrastructure"
     fi
+    __INTERNAL_PersistentDataSave
 }
 
 # backward compatibility
@@ -365,15 +369,16 @@ rlCreateLogFromJournal(){
 =head3 rlGetTestState
 
 Returns number of failed asserts in so far, 255 if there are more then 255 failures.
+The precise number is set to ECODE variable.
 
     rlGetTestState
 =cut
 
 rlGetTestState(){
-    # use ECODE for real state, return 255 at max
-    ECODE="$TESTS_FAILED"
+    __INTERNAL_PersistentDataLoad
+    ECODE=$TESTS_FAILED
     rlLogDebug "rlGetTestState: $ECODE failed assert(s) in test"
-    return $ECODE
+    [[ $ECODE -gt 255 ]] && return 255 || return $ECODE
 }
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -385,15 +390,16 @@ rlGetTestState(){
 =head3 rlGetPhaseState
 
 Returns number of failed asserts in current phase so far, 255 if there are more then 255 failures.
+The precise number is set to ECODE variable.
 
     rlGetPhaseState
 =cut
 
 rlGetPhaseState(){
-    # use ECODE for real state, return 255 at max
-    ECODE="$CURRENT_PHASE_TESTS_FAILED"
+    __INTERNAL_PersistentDataLoad
+    ECODE=$CURRENT_PHASE_TESTS_FAILED
     rlLogDebug "rlGetPhaseState: $ECODE failed assert(s) in phase"
-    return $ECODE
+    [[ $ECODE -gt 255 ]] && return 255 || return $ECODE
 }
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -401,30 +407,41 @@ rlGetPhaseState(){
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 rljAddPhase(){
+    __INTERNAL_PersistentDataLoad
     local MSG=${2:-"Phase of $1 type"}
     rlLogDebug "rljAddPhase: Phase $MSG started"
     rljWriteToMetafile phase --name "$MSG" --type "$1" >&2
     # Printing
     rljPrintHeadLog "$MSG"
 
-    INDENT_LEVEL=INDENT_LEVEL+1
-    CURRENT_PHASE_TYPE=( "$1" "${CURRENT_PHASE_TYPE[@]}" )
-    CURRENT_PHASE_NAME=( "$MSG" "${CURRENT_PHASE_NAME[@]}" )
-    PHASE_OPENED=${#CURRENT_PHASE_NAME[@]}
-    CURRENT_PHASE_TESTS_FAILED=( 0 "${CURRENT_PHASE_TESTS_FAILED[@]}" )
+    if [[ -z "$BEAKERLIB_NESTED_PHASES" ]]; then
+      INDENT_LEVEL=2
+      CURRENT_PHASE_TYPE=( "$1" )
+      CURRENT_PHASE_NAME=( "$MSG" )
+      CURRENT_PHASE_TESTS_FAILED=( 0 )
+      PHASE_OPENED=${#CURRENT_PHASE_NAME[@]}
+    else
+      let INDENT_LEVEL+=1
+      CURRENT_PHASE_TYPE=( "$1" "${CURRENT_PHASE_TYPE[@]}" )
+      CURRENT_PHASE_NAME=( "$MSG" "${CURRENT_PHASE_NAME[@]}" )
+      CURRENT_PHASE_TESTS_FAILED=( 0 "${CURRENT_PHASE_TESTS_FAILED[@]}" )
+      PHASE_OPENED=${#CURRENT_PHASE_NAME[@]}
+    fi
+    __INTERNAL_PersistentDataSave
 }
 
 rljClosePhase(){
+    __INTERNAL_PersistentDataLoad
   # TODO: check opened
     local logfile="$BEAKERLIB_DIR/journal.txt"
 
-    local score="$CURRENT_PHASE_TESTS_FAILED"
+    local score=$CURRENT_PHASE_TESTS_FAILED
     # Result
-    if [ "$CURRENT_PHASE_TESTS_FAILED" -eq 0 ]; then
+    if [ $CURRENT_PHASE_TESTS_FAILED -eq 0 ]; then
         result="PASS"
     else
         result="$CURRENT_PHASE_TYPE"
-        PHASES_FAILED=PHASES_FAILED+1
+        let PHASES_FAILED+=1
     fi
 
     local name="$CURRENT_PHASE_NAME"
@@ -435,36 +452,46 @@ rljClosePhase(){
     rlReport "$name" "$result" "$score" "$logfile"
 
     # Reset of state variables
-    INDENT_LEVEL=INDENT_LEVEL-1
-    unset CURRENT_PHASE_TYPE[0]; CURRENT_PHASE_TYPE=( "${CURRENT_PHASE_TYPE[@]}" )
-    uset CURRENT_PHASE_NAME[0]; CURRENT_PHASE_NAME=( "${CURRENT_PHASE_NAME[@]}" )
-    # TODO: implement nested phase failes count, child phase increases parent
-    # CURRENT_PHASE_TESTS_FAILED=0
+    if [[ -z "$BEAKERLIB_NESTED_PHASES" ]]; then
+      INDENT_LEVEL=1
+      CURRENT_PHASE_TYPE=()
+      CURRENT_PHASE_NAME=()
+      CURRENT_PHASE_TESTS_FAILED=()
+    else
+      let INDENT_LEVEL-=1
+      unset CURRENT_PHASE_TYPE[0]; CURRENT_PHASE_TYPE=( "${CURRENT_PHASE_TYPE[@]}" )
+      unset CURRENT_PHASE_NAME[0]; CURRENT_PHASE_NAME=( "${CURRENT_PHASE_NAME[@]}" )
+      [[ ${#CURRENT_PHASE_TESTS_FAILED[@]} -gt 1 ]] && let CURRENT_PHASE_TESTS_FAILED[1]+=CURRENT_PHASE_TESTS_FAILED[0]
+      unset CURRENT_PHASE_TESTS_FAILED[0]; CURRENT_PHASE_TESTS_FAILED=( "${CURRENT_PHASE_TESTS_FAILED[@]}" )
+    fi
     PHASE_OPENED=${#CURRENT_PHASE_NAME[@]}
     # Updating phase element
     rljWriteToMetafile --result "$result" --score "$score"
+    __INTERNAL_PersistentDataSave
 }
 
 # $1 message
 # $2 result
 # $3 command
 rljAddTest(){
-    if [ "$PHASE_OPENED" -eq 0 ]; then
+    __INTERNAL_PersistentDataLoad
+    if [ $PHASE_OPENED -eq 0 ]; then
         rljAddPhase "FAIL" "Asserts collected outside of a phase"
         rljWriteToMetafile test --message "TEST BUG: Assertion not in phase" -- "FAIL" >&2
         rlLogText "TEST BUG: Assertion not in phase" "FAIL"
         rljWriteToMetafile test --message "$1" -- "$2" >&2
         rlLogText "$1" "$2"
         rljClosePhase
-        TESTS_FAILED=TESTS_FAILED+1
-        CURRENT_PHASE_TESTS_FAILED=CURRENT_PHASE_TESTS_FAILED+1
+        let TESTS_FAILED+=1
+        let CURRENT_PHASE_TESTS_FAILED+=1
     else
         rljWriteToMetafile test --message "$1" ${3:+--command "$3"} -- "$2" >&2
         if [ "$2" != "PASS" ]; then
-            TESTS_FAILED=TESTS_FAILED+1
-            CURRENT_PHASE_TESTS_FAILED=CURRENT_PHASE_TESTS_FAILED+1
+            let TESTS_FAILED+=1
+            let CURRENT_PHASE_TESTS_FAILED+=1
         fi
     fi
+    __INTERNAL_PersistentDataSave
 }
 
 rljAddMetric(){
@@ -739,6 +766,19 @@ rljPrintTestProtocol(){
     rljPrintHeadLog "Test description"
     echo "$purpose"
 
+}
+
+__INTERNAL_PersistentDataSave() {
+  cat > "$__INTERNAL_PRESISTENT_DATA" <<EOF
+TESTS_FAILED=$TESTS_FAILED
+PHASES_FAILED=$PHASES_FAILED
+JOURNAL_OPEN=$JOURNAL_OPEN
+EOF
+declare -p CURRENT_PHASE_TESTS_FAILED >> $__INTERNAL_PRESISTENT_DATA
+}
+
+__INTERNAL_PersistentDataLoad() {
+  [[ -r "$__INTERNAL_PRESISTENT_DATA" ]] && . "$__INTERNAL_PRESISTENT_DATA"
 }
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
