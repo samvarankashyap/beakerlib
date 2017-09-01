@@ -86,15 +86,15 @@ rlJournalStart(){
     [ -z "$BEAKERLIB_JOURNAL" ] && export BEAKERLIB_JOURNAL="$BEAKERLIB_DIR/journal.xml"
     [ -z "$BEAKERLIB_METAFILE" ] && export BEAKERLIB_METAFILE="$BEAKERLIB_DIR/journal.meta"
 
-    # creating queue file
-    touch $BEAKERLIB_METAFILE
-
     # make sure the directory is ready, otherwise we cannot continue
     if [ ! -d "$BEAKERLIB_DIR" ] ; then
         echo "rlJournalStart: Failed to create $BEAKERLIB_DIR directory."
         echo "rlJournalStart: Cannot continue, exiting..."
         exit 1
     fi
+
+    # creating queue file
+    touch $BEAKERLIB_METAFILE
 
     # Initialization of variables holding current state of the test
     # TODO: rename to __INTERNAL_
