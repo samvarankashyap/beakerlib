@@ -52,8 +52,16 @@ Implements also phase support with automatic assert evaluation.
 # Internal Stuff
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-# TODO: rename back to __INTERNAL_
-rlLogText() {
+__INTERNAL_PrintText() {
+  __INTERNAL_LogText --no-file "$@"
+}
+
+__INTERNAL_LogText() {
+    local no_file=''
+    [[ "$1" == "--no-file" ]] && {
+      no_file=1
+      shift
+    }
     local MESSAGE=${1:-"***BAD BEAKERLIB_HLOG CALL***"}
     local prio="$2"
     local LOGFILE=${3:-$OUTPUTFILE}
@@ -65,10 +73,11 @@ rlLogText() {
       printf -v prefix ":: [ %(%H:%M:%S)T ] :: [\${COLOR}%*s%*s\${UNCOLOR}] ::"  -1 $left "${prio}" $(( 10-$left ))
       MESSAGE="$prefix $MESSAGE"
     }
-    if [[ -n "$LOGFILE" ]]; then
-      eval "echo -e \"${MESSAGE}\"" >> $LOGFILE
-    else
-      let res++
+    if [[ -z "$no_file" ]]; then
+      if [[ -n "$LOGFILE" ]]; then
+        eval "echo -e \"${MESSAGE}\"" >> $LOGFILE || let res++
+      fi
+      eval "echo -e \"${MESSAGE}\"" >> "$__INTERNAL_BEAKERLIB_JOURNAL_TXT" || let res++
     fi
     if [[ -t 2 ]]; then
       UNCOLOR="$__INTERNAL_color_reset"
@@ -77,7 +86,7 @@ rlLogText() {
           COLOR="$__INTERNAL_color_purple"
           ;;
         PASS)
-          COLOR="$__INTERNAL_color_light_green"
+          COLOR="$__INTERNAL_color_green"
           ;;
         FAIL)
           COLOR="$__INTERNAL_color_light_red"
@@ -88,11 +97,14 @@ rlLogText() {
         LOG|INFO|BEGIN)
           COLOR="$__INTERNAL_color_blue"
           ;;
-        WARNING|SKIP*)
+        WARN*|SKIP*)
           COLOR="$__INTERNAL_color_yellow"
           ;;
       esac
     fi
+    [[ -z "$no_file" ]] && {
+      eval "echo -e \"${MESSAGE}\"" >> "$__INTERNAL_BEAKERLIB_JOURNAL_COLORED" || let res++
+    }
     eval "echo -e \"${MESSAGE}\"" >&2 || let res++
     return $res
 }
@@ -217,7 +229,7 @@ rlLog() {
     local message="$1"
     local logfile="$2"
     local prio="${3:-LOG}"
-    rlLogText "$message" "$prio" "$logfile"
+    __INTERNAL_LogText "$message" "$prio" "$logfile"
     rljAddMessage "$message" "$prio"
 }
 
@@ -306,9 +318,9 @@ rlDie() {
 rlHeadLog() {
     local text="$1"
     local logfile=${2:-""}
-    rlLogText "\n::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::" "$logfile"
+    __INTERNAL_LogText "\n::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::" "$logfile"
     rlLog "$text" "$logfile"
-    rlLogText "::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::\n" "$logfile"
+    __INTERNAL_LogText "::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::\n" "$logfile"
     rlLogWarning "rlHeadLog is obsoleted, use rlPhase* instead"
 }
 

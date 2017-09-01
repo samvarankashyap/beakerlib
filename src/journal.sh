@@ -45,6 +45,7 @@ printing journal contents.
 =cut
 
 __INTERNAL_JOURNALIST=beakerlib-journalling
+__INTERNAL_timeformat="%Y-%m-%d %H:%M:%S %Z"
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -67,6 +68,7 @@ functionality.
 =cut
 
 rlJournalStart(){
+    printf -v __INTERNAL_STARTTIME "%(%s)T" -1
     # test-specific temporary directory for journal/metadata
     if [ -n "$BEAKERLIB_DIR" ]; then
         # try user-provided temporary directory first
@@ -85,6 +87,8 @@ rlJournalStart(){
     # unless already set by user set global BeakerLib journal and meta file variables
     [ -z "$BEAKERLIB_JOURNAL" ] && export BEAKERLIB_JOURNAL="$BEAKERLIB_DIR/journal.xml"
     [ -z "$BEAKERLIB_METAFILE" ] && export BEAKERLIB_METAFILE="$BEAKERLIB_DIR/journal.meta"
+    __INTERNAL_BEAKERLIB_JOURNAL_TXT="$(echo "$BEAKERLIB_JOURNAL" | sed -r 's/\.[^.]+$//').txt"
+    __INTERNAL_BEAKERLIB_JOURNAL_COLORED="$(echo "$BEAKERLIB_JOURNAL" | sed -r 's/\.[^.]+$//')_colored.txt"
 
     # make sure the directory is ready, otherwise we cannot continue
     if [ ! -d "$BEAKERLIB_DIR" ] ; then
@@ -111,9 +115,9 @@ rlJournalStart(){
 
     if [[ -z "$JOURNAL_OPEN" ]]; then
       # Create Header for XML journal
-      rljCreateHeader
+      __INTERNAL_CreateHeader
       # Create log element for XML journal
-      rljWriteToMetafile log
+      __INTERNAL_WriteToMetafile log
     fi
     JOURNAL_OPEN=1
     # Increase level of indent
@@ -186,8 +190,8 @@ rlJournalEnd(){
       return $?
     fi
     local journal="$BEAKERLIB_JOURNAL"
-    local journaltext="$BEAKERLIB_DIR/journal.txt"
-    # this should not be needed as the text form should be generated continueousely by rlLogText
+    local journaltext="$__INTERNAL_BEAKERLIB_JOURNAL_TXT"
+    # this should not be needed as the text form should be generated continueousely by __INTERNAL_LogText
     #rlJournalPrintText > $journaltext
 
 
@@ -200,9 +204,9 @@ rlJournalEnd(){
         $BEAKERLIB_COMMAND_SUBMIT_LOG -T $TESTID -l $journal \
         || rlLogError "rlJournalEnd: Submit wasn't successful"
     else
-        rlLogText "JOURNAL META: $BEAKERLIB_METAFILE" LOG
-        rlLogText "JOURNAL XML: $journal" LOG
-        rlLogText "JOURNAL TXT: $journaltext" LOG
+        rlLog "JOURNAL META: $BEAKERLIB_METAFILE"
+        rlLog "JOURNAL XML: $journal"
+        rlLog "JOURNAL TXT: $journaltext"
     fi
 
     echo "#End of metafile" >> $BEAKERLIB_METAFILE
@@ -341,8 +345,9 @@ Example:
 =cut
 # call rlJournalPrint
 rlJournalPrintText(){
-    # TODO temporary fix
-    rljPrintTestProtocol
+    __INTERNAL_ENDTIME=$__INTERNAL_TIMESTAMP
+    echo -e "\n\n\n\n"
+    cat $__INTERNAL_BEAKERLIB_JOURNAL_COLORED | sed -r "s/__INTERNAL_ENDTIME/$(printf "%($__INTERNAL_timeformat)T" $__INTERNAL_ENDTIME)/"
     return 0
 
     local SEVERITY=${LOG_LEVEL:-"INFO"}
@@ -409,7 +414,7 @@ rljAddPhase(){
     __INTERNAL_PersistentDataLoad
     local MSG=${2:-"Phase of $1 type"}
     rlLogDebug "rljAddPhase: Phase $MSG started"
-    rljWriteToMetafile phase --name "$MSG" --type "$1" >&2
+    __INTERNAL_WriteToMetafile phase --name "$MSG" --type "$1" >&2
     # Printing
     rljPrintHeadLog "$MSG"
 
@@ -465,7 +470,7 @@ rljClosePhase(){
     fi
     PHASE_OPENED=${#CURRENT_PHASE_NAME[@]}
     # Updating phase element
-    rljWriteToMetafile --result "$result" --score "$score"
+    __INTERNAL_WriteToMetafile --result "$result" --score "$score"
     __INTERNAL_PersistentDataSave
 }
 
@@ -476,15 +481,15 @@ rljAddTest(){
     __INTERNAL_PersistentDataLoad
     if [ $PHASE_OPENED -eq 0 ]; then
         rljAddPhase "FAIL" "Asserts collected outside of a phase"
-        rljWriteToMetafile test --message "TEST BUG: Assertion not in phase" -- "FAIL" >&2
-        rlLogText "TEST BUG: Assertion not in phase" "FAIL"
-        rljWriteToMetafile test --message "$1" -- "$2" >&2
-        rlLogText "$1" "$2"
+        __INTERNAL_WriteToMetafile test --message "TEST BUG: Assertion not in phase" -- "FAIL" >&2
+        __INTERNAL_LogText "TEST BUG: Assertion not in phase" "FAIL"
+        __INTERNAL_WriteToMetafile test --message "$1" -- "$2" >&2
+        __INTERNAL_LogText "$1" "$2"
         rljClosePhase
         let TESTS_FAILED+=1
         let CURRENT_PHASE_TESTS_FAILED+=1
     else
-        rljWriteToMetafile test --message "$1" ${3:+--command "$3"} -- "$2" >&2
+        __INTERNAL_WriteToMetafile test --message "$1" ${3:+--command "$3"} -- "$2" >&2
         if [ "$2" != "PASS" ]; then
             let TESTS_FAILED+=1
             let CURRENT_PHASE_TESTS_FAILED+=1
@@ -503,71 +508,39 @@ rljAddMetric(){
         return 1
     fi
     rlLogDebug "rljAddMetric: Storing metric $MID with value $VALUE and tolerance $TOLERANCE"
-    rljWriteToMetafile metric --type "$1" --name "$MID" \
-        --value="$VALUE" --tolerance="$TOLERANCE" >&2
+    __INTERNAL_WriteToMetafile metric --type "$1" --name "$MID" \
+        --value "$VALUE" --tolerance "$TOLERANCE" >&2
     return $?
 }
 
 rljAddMessage(){
-    rljWriteToMetafile message --message "$1" --severity "$2" >&2
+    __INTERNAL_WriteToMetafile message --severity "$2" -- "$1" >&2
+}
+
+__INTERNAL_GetPackageDetails() {
+    rpm -q "$1" --qf "%{name}-%{version}-%{release}.%{arch} %{sourcerpm}"
 }
 
 rljRpmLog(){
-    #rljWriteToMetafile rpm --package "$1" >&2
-
-    # TODO probably runs again pointlessly, it should be enough to have it run in header-creation and save it into global
-    package="$1"
-    # MEETING Anyway, is this needed at all? Why does every phase have pkgdetails again when it is in the header?
-    # Write package details (rpm, srcrpm) into metafile
-    rljGetPackageDetails $package
-}
-
-
-# TODO comment
-rljGetRPM() {
-    rpm=$(rpm -q $1)
-    [ $? -ne 0 ] && return 1 # TODO_IMP doesn't work, returns 0 no matter what
-    echo "$rpm"
-    return 0
-}
-
-# TODO comment
-rljGetSRCRPM() {
-    srcrpm=$(rpm -q $1 --qf '%{SOURCERPM}')
-    [ $? -ne 0 ] && return 1
-    echo "$srcrpm"
-    return 0
-}
-
-# TODO comment
-# TODO: rename funtion to match what it actually does
-# TODO: should be intrenal, maybe replaced bu __INTERNAL_rpmGetPackageInfo
-rljGetPackageDetails(){
-    # RPM and SRCRPM version of the package
-    if [ "$1" != "unknown" ]; then
-        rpm=$(rljGetRPM $1)
-        if [ $? -ne 0 ]; then
-            rljWriteToMetafile pkgnotinstalled -- "$1"
-        else
-            srcrpm=$(rljGetSRCRPM $1)
-            rljWriteToMetafile pkgdetails --sourcerpm "$srcrpm" -- "$rpm"
-        fi
+    local package_details
+    if package_details=( __INTERNAL_GetPackageDetails "$1" ); then
+        __INTERNAL_WriteToMetafile pkgnotinstalled -- "$1"
+    else
+        __INTERNAL_WriteToMetafile pkgdetails --sourcerpm "${package_details[1]}" -- "${package_details[0]}"
     fi
-    return 0
 }
 
-# TODO comment
-# TODO: rename to _INTERNAL_
-rljDeterminePackage(){
+
+# determine SUT package
+__INTERNAL_DeterminePackage(){
+    local package="$PACKAGE"
     if [ "$PACKAGE" == "" ]; then
         if [ "$TEST" == "" ]; then
             package="unknown"
         else
-            arrPac=(${TEST//// })
+            local arrPac=(${TEST//// })
             package=${arrPac[1]}
         fi
-    else
-        package="$PACKAGE"
     fi
     echo "$package"
     return 0
@@ -577,85 +550,119 @@ rljDeterminePackage(){
 # MEETING rename all vars to BEAKERLIB_... to prevent overwriting them in test?
 # MEETING (they are used later in creating TEST PROTOCOL)
 # Creates header
-rljCreateHeader(){
+__INTERNAL_CreateHeader(){
+
+    rljPrintHeadLog "TEST PROTOCOL" 2> /dev/null
 
     # Determine package which is tested
-    package=$(rljDeterminePackage)
-    rljWriteToMetafile package -- "$package"
+    local package=$(__INTERNAL_DeterminePackage)
+    __INTERNAL_WriteToMetafile package -- "$package"
+    __INTERNAL_LogText "Package       : $package" LOG 2> /dev/null
 
     # Write package details (rpm, srcrpm) into metafile
-    rljGetPackageDetails $package
+    rljRpmLog "$package"
+    package=( $(__INTERNAL_GetPackageDetails "$package") ) && \
+        __INTERNAL_LogText "Installed     : ${package[0]}" LOG 2> /dev/null
 
     # RPM version of beakerlib
-    beakerlib_rpm=$(rljGetRPM beakerlib)
-    [ $? -eq 0 ] && rljWriteToMetafile beakerlib_rpm -- "$beakerlib_rpm"
+    package=( $(__INTERNAL_GetPackageDetails "beakerlib") ) && {
+        __INTERNAL_WriteToMetafile beakerlib_rpm -- "${package[0]}"
+        __INTERNAL_LogText "beakerlib RPM : ${package[0]}" LOG 2> /dev/null
+    }
 
     # RPM version of beakerlib-redhat
-    beakerlib_redhat_rpm=$(rljGetRPM beakerlib-redhat)
-    [ $? -eq 0 ] && rljWriteToMetafile beakerlib_redhat_rpm -- "$beakerlib_redhat_rpm"
+    package=( $(__INTERNAL_GetPackageDetails "beakerlib-redhat") ) && {
+        __INTERNAL_WriteToMetafile beakerlib_redhat_rpm -- "${package[0]}"
+        __INTERNAL_LogText "bl-redhat RPM : ${package[0]}" LOG 2> /dev/null
+    }
 
 
     # Starttime and endtime
-    rljWriteToMetafile starttime
-    rljWriteToMetafile endtime
+    __INTERNAL_WriteToMetafile starttime
+    __INTERNAL_WriteToMetafile endtime
+    __INTERNAL_LogText "Test started  : $(printf "%($__INTERNAL_timeformat)T" $__INTERNAL_STARTTIME)" LOG 2> /dev/null
+    __INTERNAL_LogText "Test finished : __INTERNAL_ENDTIME" LOG 2> /dev/null
 
     # Test name
-    [ "$TEST" == ""  ] && TEST="unknown"
-    rljWriteToMetafile testname -- "$TEST"
+    # TODO: have we set TEST before if it was empty?
+    local testname="${TEST:-unknown}"
+    __INTERNAL_WriteToMetafile testname -- "${testname}"
+    __INTERNAL_LogText "Test name     : ${testname}" LOG 2> /dev/null
 
     # OS release
-    release=$(cat /etc/redhat-release)
-    [ "$release" != "" ] && rljWriteToMetafile release -- "$release"
+    local release=$(cat /etc/redhat-release)
+    [[ -n "$release" ]] && {
+        __INTERNAL_WriteToMetafile release -- "$release"
+        __INTERNAL_LogText "Distro        : ${release}" LOG 2> /dev/null
+    }
 
-    # Hostname # MEETING is there a better way?
-    hostname=$(python -c 'import socket; print(socket.getfqdn())')
-    [ "$hostname" != "" ] && rljWriteToMetafile hostname -- "$hostname"
+    # to avoid using python let's try hostname, hopefully it will give good enough result in real env
+    local hostname=$(hostname --fqdn)
+    [[ -n "$hostname" ]] && {
+        __INTERNAL_WriteToMetafile hostname -- "$hostname"
+        __INTERNAL_LogText "Hostname      : ${hostname}" LOG 2> /dev/null
+    }
 
     # Architecture # MEETING is it the correct way?
-    arch=$(arch)
-    [ "$arch" != "" ] && rljWriteToMetafile arch -- "$arch"
+    local arch=$(uname -i 2>/dev/null || uname -m)
+    [[ -n "$arch" ]] && {
+        __INTERNAL_WriteToMetafile arch -- "$arch"
+        __INTERNAL_LogText "Architecture  : ${arch}" LOG 2> /dev/null
+    }
 
+    local line size
     # CPU info
     if [ -f "/proc/cpuinfo" ]; then
-        count=0
-        type=""
-        cpu_regex="^model\sname.*: (.*)$"
+        local count=0
+        local type=""
+        local cpu_regex="^model\sname.*: (.*)$"
         while read line; do
-            if [[ "$line" =~ $cpu_regex ]]; then    # MEETING bash construct, is it ok?
+            if [[ "$line" =~ $cpu_regex ]]; then
                 type="${BASH_REMATCH[1]}"
                 let count++
             fi
         done < "/proc/cpuinfo"
-        rljWriteToMetafile hw_cpu -- "$count x $type"
+        __INTERNAL_WriteToMetafile hw_cpu -- "$count x $type"
+        __INTERNAL_LogText "CPU           : $count x $type" LOG 2> /dev/null
     fi
 
     # RAM size
-     if [ -f "/proc/meminfo" ]; then
+     if [[ -f "/proc/meminfo" ]]; then
         size=0
-        ram_regex="^MemTotal: *(.*) kB$"
+        local ram_regex="^MemTotal: *(.*) kB$"
         while read line; do
-            if [[ "$line" =~ $ram_regex ]]; then   # MEETING bash construct, is it ok?
+            if [[ "$line" =~ $ram_regex ]]; then
                 size=`expr ${BASH_REMATCH[1]} / 1024`
                 break
             fi
         done < "/proc/meminfo"
-        rljWriteToMetafile hw_ram -- "$size MB"
+        __INTERNAL_WriteToMetafile hw_ram -- "$size MB"
+        __INTERNAL_LogText "Mem           : ${size} MB" LOG 2> /dev/null
     fi
 
     # HDD size
     size=0
-    hdd_regex="^(/[^ ]+) +([0-9]+) +[0-9]+ +[0-9]+ +[0-9]+% +[^ ]+$"
+    local hdd_regex="^(/[^ ]+) +([0-9]+) +[0-9]+ +[0-9]+ +[0-9]+% +[^ ]+$"
     while read -r line ; do
         if [[ "$line" =~ $hdd_regex ]]; then   # MEETING bash construct, is it ok?
-            let "size=size+${BASH_REMATCH[2]}"
-         fi
+            let size+=BASH_REMATCH[2]
+        fi
     done < <(df -k -P --local --exclude-type=tmpfs)
-    [ "$size" -ne 0 ] && rljWriteToMetafile hw_hdd -- "$(echo "scale=2;$size/1024/1024" | bc) GB"
+    [[ -n "$size" ]] && {
+        size="$(echo "$((size*100/1024/1024))" | sed -r 's/..$/.\0/') GB"
+        __INTERNAL_WriteToMetafile hw_hdd -- "$size"
+        __INTERNAL_LogText "HDD           : ${size}" LOG 2> /dev/null
+    }
 
     # Purpose
-    purpose=""
-    [ -f 'PURPOSE' ] && purpose=$(cat PURPOSE)
-    rljWriteToMetafile purpose -- "$purpose"
+    [[ -f 'PURPOSE' ]] && {
+        local purpose tmp
+        mapfile -t tmp < PURPOSE
+        printf -v purpose "%s\n" "${tmp[@]}"
+        __INTERNAL_WriteToMetafile purpose -- "$purpose"
+        rljPrintHeadLog "Test description" 2> /dev/null
+        __INTERNAL_LogText "$purpose" 2> /dev/null
+    }
 
     return 0
 }
@@ -670,9 +677,10 @@ __INTERNAL_jHash() {
 # Adds --timestamp argument and indent
 # writes it into metafile
 # takes [element] --attribute1 value1 --attribute2 value2 .. [-- "content"]
-rljWriteToMetafile(){
-    local timestamp indent
-    printf -v timestamp '%(%s)T' -1
+# TODO: rename to __INTERNAL_ as it does not need to be visible for user
+__INTERNAL_WriteToMetafile(){
+    printf -v __INTERNAL_TIMESTAMP '%(%s)T' -1
+    local indent
     local line=""
     local lineraw=''
     local ARGS=("$@")
@@ -689,17 +697,19 @@ rljWriteToMetafile(){
       case $1 in
       --)
         line+=" -- \"$(echo -n "$2" | base64 -w 0)\""
-        lineraw+=" -- \"$2\""
+        #lineraw+=" -- \"$2\""
+        printf -v lineraw "%s -- %q" "$lineraw" "$2"
         shift 2
         break
         ;;
       --*)
         line+=" $1=\"$(echo -n "$2" | base64 -w 0)\""
-        lineraw+=" $1=\"$2\""
+        #lineraw+=" $1=\"$2\""
+        printf -v lineraw "%s %s=%q" "$lineraw" "$1" "$2"
         shift
         ;;
       *)
-        rlLogText "unexpected meta input format"
+        __INTERNAL_LogText "unexpected meta input format"
         set | grep ^ARGS=
         exit 124
         ;;
@@ -707,33 +717,33 @@ rljWriteToMetafile(){
       shift
     done
     [[ $# -gt 0 ]] && {
-      rlLogText "unexpected meta input format"
+      __INTERNAL_LogText "unexpected meta input format"
       set | grep ^ARGS=
       exit 125
     }
 
     printf -v indent '%*s' $INDENT_LEVEL
 
-    line="$indent${element:+$element }--timestamp=\"$timestamp\"$line"
-    lineraw="$indent${element:+$element }--timestamp=\"$timestamp\"$lineraw"
+    line="$indent${element:+$element }--timestamp=\"${__INTERNAL_TIMESTAMP}\"$line"
+    lineraw="$indent${element:+$element }--timestamp=\"${__INTERNAL_TIMESTAMP}\"$lineraw"
     #echo "#${lineraw:1}" >&2
-    #echo "#${lineraw:1}" >> $BEAKERLIB_METAFILE
+    echo "#${lineraw:1}" >> $BEAKERLIB_METAFILE
     echo "$line" >> $BEAKERLIB_METAFILE
 }
 
 rljPrintHeadLog(){
-    rlLogText "\n::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::"
-    rlLogText "$1" LOG
-    rlLogText "::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::\n"
+    __INTERNAL_LogText "\n::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::"
+    __INTERNAL_LogText "$1" LOG
+    __INTERNAL_LogText "::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::\n"
 }
 
 # TODO: will be completely rewritten using coninueously generated log file
 rljPrintTestProtocol(){
     rljPrintHeadLog "TEST PROTOCOL"
-    rlLogText "Package       : $package"
-    rlLogText "Installed     : $(rljGetRPM "$package")"
-    rlLogText "beakerlib RPM : $beakerlib_rpm"
-    rlLogText "bl-redhat RPM : $beakerlib_redhat_rpm"
+    __INTERNAL_LogText "Package       : $package"
+    __INTERNAL_LogText "Installed     : $(rljGetRPM "$package")"
+    __INTERNAL_LogText "beakerlib RPM : $beakerlib_rpm"
+    __INTERNAL_LogText "bl-redhat RPM : $beakerlib_redhat_rpm"
 
     STARTTIME=""
     ENDTIME=""
@@ -755,12 +765,12 @@ rljPrintTestProtocol(){
     STARTTIME=$(date -d "@$STARTTIME" '+%Y-%m-%d %H:%M:%S %Z')
     ENDTIME=$(date -d "@$ENDTIME" '+%Y-%m-%d %H:%M:%S %Z')
 
-    rlLogText "Test started  : $STARTTIME"
-    rlLogText "Test finished : $ENDTIME"
-    rlLogText "Test name     : $TEST"
-    rlLogText "Distro        : $release"
-    rlLogText "Hostname      : $hostname"
-    rlLogText "Architecture  : $arch"
+    __INTERNAL_LogText "Test started  : $STARTTIME"
+    __INTERNAL_LogText "Test finished : $ENDTIME"
+    __INTERNAL_LogText "Test name     : $TEST"
+    __INTERNAL_LogText "Distro        : $release"
+    __INTERNAL_LogText "Hostname      : $hostname"
+    __INTERNAL_LogText "Architecture  : $arch"
 
     rljPrintHeadLog "Test description"
     echo "$purpose"
@@ -769,6 +779,7 @@ rljPrintTestProtocol(){
 
 __INTERNAL_PersistentDataSave() {
   cat > "$__INTERNAL_PRESISTENT_DATA" <<EOF
+__INTERNAL_STRATTIME=$__INTERNAL_STRATTIME
 TESTS_FAILED=$TESTS_FAILED
 PHASES_FAILED=$PHASES_FAILED
 JOURNAL_OPEN=$JOURNAL_OPEN

@@ -68,11 +68,11 @@ __INTERNAL_LogAndJournalFail() {
 
 __INTERNAL_ConditionalAssert() {
     if [ "$2" == "0" ]; then
-        rlLogText "$1" "PASS"
+        __INTERNAL_LogText "$1" "PASS"
         __INTERNAL_LogAndJournalPass "$1" "$3" "$4"
         return 0
     else
-        rlLogText "$1" "FAIL"
+        __INTERNAL_LogText "$1" "FAIL"
         __INTERNAL_LogAndJournalFail "$1" "$3" "$4"
         return 1
     fi
@@ -846,7 +846,7 @@ rlRun() {
 
     rlLogDebug "rlRun: Running command: $__INTERNAL_rlRun_command"
 
-    rlLogText "$__INTERNAL_rlRun_comment_begin" "BEGIN"
+    __INTERNAL_PrintText "$__INTERNAL_rlRun_comment_begin" "BEGIN"
 
     if $__INTERNAL_rlRun_DO_LOG || $__INTERNAL_rlRun_DO_TAG || $__INTERNAL_rlRun_DO_KEEP; then
         eval "$__INTERNAL_rlRun_command" 2> >(sed -u -e "s/^/$__INTERNAL_rlRun_TAG_ERR/g" |
