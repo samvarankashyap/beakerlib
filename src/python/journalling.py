@@ -30,14 +30,10 @@ from lxml import etree
 import shlex
 import base64
 
-TIME_FORMAT = "%Y-%m-%d %H:%M:%S %Z"  # TODO move to parseLine() if used nowhere else
 
 #### MEETING ####
-# starttime endtime of phases and other elements, how to make them? can I count of timestamp on every line? should I search for first/last occurrence of timestamp? = possibly incorrect values
-# BEAKERLIB_JOURNAL is an environmental var, keep it that way or parameter as well as meta,xslt?
-# HEX: echo -n "Hello" | od -A n -t x1    however it produces spaces, either leave them or get rid of them using sed...another program
-# base64: dependency needed?
-# speed: simple speed testing in files ~/atmp/base64time.sh and ~/atmp/hextime.sh
+# TODO look into minidom (pretty print issue)
+# TODO print to stdout if not parameter
 #### END ####
 
 #### metafile format guidelines ####
@@ -45,7 +41,6 @@ TIME_FORMAT = "%Y-%m-%d %H:%M:%S %Z"  # TODO move to parseLine() if used nowhere
 # indent difference must be done with 1 whitespace char
 # BEAKER_TEST element is included in python, do not use it again in metafile
 # closing a paired element(1 indent less than previous indent) must be done with 1) new element, 2) attribute (e.g.: --result="...") #TODO new element closing not tested
-# last line of metafile must be an empty line (or a comment) - possibly
 # "header" must contain <starttime> <endtime> elements, which are updated at the end of the journal creation
 # attribute must match regex --[a-zA-Z0-9]+= (= only containing letters and digits, starts with -- and end with =)
 # attribute --timestamp must contain value of integer representing seconds (UNIX time)
@@ -66,23 +61,20 @@ class Stack:
         return self.items[-1]
 
 
-def saveJournal(journal):
-    journal_path = os.environ['BEAKERLIB_JOURNAL']
+def saveJournal(journal, journal_path):
     try:
         output = open(journal_path, 'wb')
         output.write(etree.tostring(journal, xml_declaration=True, encoding='utf-8'))
         output.close()
         return 0
     except IOError, e:
-        sys.stderr.write('Failed to save journal to %s: %s' % (journal, str(e)))
+        sys.stderr.write('Failed to save journal to %s: %s' % (journal_path, str(e)))
         return 1
 
 
-# MEETING to remove or not remove timestamp? causes troubles in a form of rewriting original timestamp
-# MEETING ...with that one of updating closing line (--result="" etc) resulting in wrong value.
-# MEETING ...This can be avoided however no "nice" solution comes to mind
+# TODO check if it is done when implicitly ending paired element(closephase without --result=...)
+# TODO description
 def addStartEndTime(element, starttime, endtime):
-    starttime, endtime = getStartEndTime(element)
     element.set("starttime", starttime)
     element.set("endtime", endtime)
     # Removing timestamp from paired element (not needed as it has start/endtime)
@@ -91,16 +83,15 @@ def addStartEndTime(element, starttime, endtime):
     return 0
 
 
-# MEETING first and last doesn't necessarily have to be correct (if missing - however that should not happen)
 # Find first and last timestamp to fill in starttime and endtime elements of given element
 def getStartEndTime(element):
     starttime = ""
     endtime = ""
-    for timestamp in element.iter():
-        if timestamp.get("timestamp"):
+    for child in element.iter():
+        if child.get("timestamp"):
             if starttime == "":
-                starttime = timestamp.get("timestamp")
-            endtime=timestamp.get("timestamp")
+                starttime = child.get("timestamp")
+            endtime=child.get("timestamp")
 
     return starttime, endtime
 
@@ -109,6 +100,7 @@ def getStartEndTime(element):
 # Returns number of spaces before element, name of the element,
 # its attributes in a dictionary, and content of the element
 def parseLine(line):
+    TIME_FORMAT = "%Y-%m-%d %H:%M:%S %Z"
     CONTENT_FLAG = 0
     attributes = {}
     content = ""
@@ -145,7 +137,7 @@ def parseLine(line):
             continue
         # test if string is an elements time attribute
         if re.match(r'^--timestamp=', part):
-            attribute_name = part.split('=', 1)[0][2:]
+            attribute_name = "timestamp"
             attribute_value = part.split('=', 1)[1]
             attributes[attribute_name] = time.strftime(TIME_FORMAT, time.localtime(int(attribute_value)))
             continue
@@ -190,6 +182,9 @@ def createJournalXML(options):
     # Main loop, going through lines of metafile, adding elements
     for line in lines:
         indent, element, attributes, content = parseLine(line)
+        # Empty line is ignored
+        if element == "" and attributes == {}:
+            continue
 
         if indent > old_indent:
             # Creating new element
@@ -216,29 +211,21 @@ def createJournalXML(options):
                 el_stack.peek().append(previous_el)
                 previous_el = el_stack.pop()
 
-            # End of metafile
-            if element == "" and attributes == {}:
+            # Closing element with updates to it
+            if element == "" and attributes != {}:
                 # Updating start and end time
                 starttime, endtime = getStartEndTime(previous_el)
-                addStartEndTime(previous_el, starttime, endtime)
-
-                if not el_stack.items:  # FIXME workaround
-                    break
-                # Appending previous element to the element 1 level above
-                el_stack.peek().append(previous_el)
-
-            # Closing element with updates to it
-            elif element == "" and attributes != {}:
+                # If the closing element has a --timestamp, this value will be used as endtime
+                if "timestamp" in attributes:
+                    endtime=attributes["timestamp"]
                 # Updating attributes found on closing line
                 for key, value in attributes.iteritems():
                     previous_el.set(key, value)
-
-                # Updating start and end time
-                starttime, endtime = getStartEndTime(previous_el)
+                # add start/end time and remove timestamp attribute
                 addStartEndTime(previous_el, starttime, endtime)
 
             # Ending paired element and creating new one on the same level as the paired one that just ended
-            elif element != "":  # FIXME possibly breaks stuff, inspect with ^FIXME
+            elif element != "":  # FIXME possibly breaks stuff?
                 # Updating start and end time
                 starttime, endtime = getStartEndTime(previous_el)
                 addStartEndTime(previous_el, starttime, endtime)
@@ -248,6 +235,19 @@ def createJournalXML(options):
 
         # Changing indent level to new value
         old_indent = indent
+
+    # Final appending
+    for elem in el_stack.items:
+        el_stack.peek().append(previous_el)
+        previous_el = el_stack.pop()
+
+    # Appending previous element to the element 1 level above
+    el_stack.peek().append(previous_el)
+
+    # Updating start and end time of last opened paired element(log)
+    starttime, endtime = getStartEndTime(previous_el)
+    addStartEndTime(previous_el, starttime, endtime)
+
 
     # Updating start/end time of the whole test
     starttime, endtime = getStartEndTime(journal)
@@ -261,55 +261,25 @@ def createJournalXML(options):
         transform = etree.XSLT(xslt)
         journal = transform(journal)
 
-    # SMAZAT
-    # for element in journal:
-    #     #print element
-    #     if len(element):
-    #         for child in element:
-    #      #       print "  ", child
-    #             child.text = ""
-    #             for key, value in child.items():
-    #                 child.attrib.pop(key, None)
-    #
-    #             if len(child):
-    #                 for cch in child:
-    #                     cch.text = ""
-    #                     for key, value in cch.items():
-    #                         cch.attrib.pop(key, None)
-    #
-    #     element.text = ""
-    #     for key, value in element.items():
-    #         element.attrib.pop(key, None)
-
-
-    #print etree.tostring(journal, pretty_print=True)  # SMAZAT
-    #exit(79) # SMAZAT
-
     # Save journal to a file and return its exit code
-    return saveJournal(journal)
+    return saveJournal(journal, options.journal)
 
 
 def main():
+    # TODO write help?
+    DESCRIPTION = "Tool creating journal out of metafile."
+    usage=__file__+" --metafile=METAFILE --journal=JOURNAL"
+    optparser = OptionParser(description=DESCRIPTION, usage=usage)
 
-    # SMAZAT
-    if 'BEAKERLIB_JOURNAL' not in os.environ:
-        os.environ['BEAKERLIB_JOURNAL'] = '/home/jheger/atmp/journal.xml.example'
-
-
-    if 'BEAKERLIB_JOURNAL' not in os.environ:
-        sys.stderr.write("BEAKERLIB_JOURNAL variable not defined in the environment.\n"
-                         "Exiting unsuccessfully.\n")
-        exit(1)
-
-    # TODO write help, usage?
-    DESCRIPTION = "Tool to create XML journal out of metafile"
-    optparser = OptionParser(description=DESCRIPTION)
-
+    optparser.add_option("-j", "--journal", default=None, dest="journal", metavar="JOURNAL")
     optparser.add_option("-m", "--metafile", default=None, dest="metafile", metavar="METAFILE")
     optparser.add_option("-x", "--xslt", default=None, dest="xslt", metavar="XSTL")
 
     (options, args) = optparser.parse_args()
 
+    if options.journal is None:
+        sys.stderr.write("--journal option not provided.\nExiting unsuccessfully.\n")
+        exit(1)
     if options.metafile is None:
         sys.stderr.write("--metafile option not provided.\nExiting unsuccessfully.\n")
         exit(1)
