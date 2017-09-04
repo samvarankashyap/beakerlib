@@ -257,6 +257,13 @@ Print the content of the journal in pretty xml format.
 
     rlJournalPrint [type]
 
+This function is now deprecated due to journal rewrite and will be removed in
+some of the future versions.
+
+To achieve the pretty output call rlJournalWriteXML and `cat $BEAKERLIB_JOURNAL | xmllint --format - `.
+To achieve the raw output call rlJournalWriteXML and `cat $BEAKERLIB_JOURNAL`.
+
+
 =over
 
 =item type
@@ -302,8 +309,9 @@ Example:
 
 # cat generated text version
 rlJournalPrint(){
-    local TYPE=${1:-"pretty"}
-    $__INTERNAL_JOURNALIST dump --type "$TYPE"
+    rlLogWarning "$FUNCNAME(): this function was deprecated by the journal rewrite and will be removed in some of the future versions."
+    rlLogInfo "$FUNCNAME(): to achieve the pretty output call rlJournalWriteXML and cat \$BEAKERLIB_JOURNAL | xmllint --format -"
+    rlLogInfo "$FUNCNAME(): to achieve the raw output call rlJournalWriteXML and cat \$BEAKERLIB_JOURNAL"
 }
 
 # backward compatibility
