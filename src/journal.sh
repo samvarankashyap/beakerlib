@@ -729,7 +729,7 @@ __INTERNAL_WriteToMetafile(){
 
 rljPrintHeadLog(){
     __INTERNAL_LogText "\n::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::"
-    __INTERNAL_LogText "$1" LOG
+    __INTERNAL_LogText "::   $1"
     __INTERNAL_LogText "::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::\n"
 }
 
