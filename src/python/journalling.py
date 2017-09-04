@@ -281,7 +281,7 @@ def main():
 
     optparser.add_option("-j", "--journal", default=None, dest="journal", metavar="JOURNAL")
     optparser.add_option("-m", "--metafile", default=None, dest="metafile", metavar="METAFILE")
-    optparser.add_option("-x", "--xslt", default=None, dest="xslt", metavar="XSTL")
+    optparser.add_option("-x", "--xslt", default=None, dest="xslt", metavar="XSLT")
 
     (options, args) = optparser.parse_args()
 
