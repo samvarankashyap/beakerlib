@@ -552,58 +552,58 @@ __INTERNAL_CreateHeader(){
     # Determine package which is tested
     local package=$(__INTERNAL_DeterminePackage)
     __INTERNAL_WriteToMetafile package -- "$package"
-    __INTERNAL_LogText "Package       : $package" LOG 2> /dev/null
+    __INTERNAL_LogText "    Package       : $package" 2> /dev/null
 
     # Write package details (rpm, srcrpm) into metafile
     rljRpmLog "$package"
     package=( $(__INTERNAL_GetPackageDetails "$package") ) && \
-        __INTERNAL_LogText "Installed     : ${package[0]}" LOG 2> /dev/null
+        __INTERNAL_LogText "    Installed     : ${package[0]}" 2> /dev/null
 
     # RPM version of beakerlib
     package=( $(__INTERNAL_GetPackageDetails "beakerlib") ) && {
         __INTERNAL_WriteToMetafile beakerlib_rpm -- "${package[0]}"
-        __INTERNAL_LogText "beakerlib RPM : ${package[0]}" LOG 2> /dev/null
+        __INTERNAL_LogText "    beakerlib RPM : ${package[0]}" 2> /dev/null
     }
 
     # RPM version of beakerlib-redhat
     package=( $(__INTERNAL_GetPackageDetails "beakerlib-redhat") ) && {
         __INTERNAL_WriteToMetafile beakerlib_redhat_rpm -- "${package[0]}"
-        __INTERNAL_LogText "bl-redhat RPM : ${package[0]}" LOG 2> /dev/null
+        __INTERNAL_LogText "    bl-redhat RPM : ${package[0]}" 2> /dev/null
     }
 
 
     # Starttime and endtime
     __INTERNAL_WriteToMetafile starttime
     __INTERNAL_WriteToMetafile endtime
-    __INTERNAL_LogText "Test started  : $(printf "%($__INTERNAL_timeformat)T" $__INTERNAL_STARTTIME)" LOG 2> /dev/null
-    __INTERNAL_LogText "Test finished : __INTERNAL_ENDTIME" LOG 2> /dev/null
-    __INTERNAL_LogText "Test duration : __INTERNAL_DURATION" LOG 2> /dev/null
+    __INTERNAL_LogText "    Test started  : $(printf "%($__INTERNAL_timeformat)T" $__INTERNAL_STARTTIME)" 2> /dev/null
+    __INTERNAL_LogText "    Test finished : __INTERNAL_ENDTIME" 2> /dev/null
+    __INTERNAL_LogText "    Test duration : __INTERNAL_DURATION" 2> /dev/null
 
     # Test name
     # TODO: have we set TEST before if it was empty?
     local testname="${TEST:-unknown}"
     __INTERNAL_WriteToMetafile testname -- "${testname}"
-    __INTERNAL_LogText "Test name     : ${testname}" LOG 2> /dev/null
+    __INTERNAL_LogText "    Test name     : ${testname}" 2> /dev/null
 
     # OS release
     local release=$(cat /etc/redhat-release)
     [[ -n "$release" ]] && {
         __INTERNAL_WriteToMetafile release -- "$release"
-        __INTERNAL_LogText "Distro        : ${release}" LOG 2> /dev/null
+        __INTERNAL_LogText "    Distro        : ${release}" 2> /dev/null
     }
 
     # to avoid using python let's try hostname, hopefully it will give good enough result in real env
     local hostname=$(hostname --fqdn)
     [[ -n "$hostname" ]] && {
         __INTERNAL_WriteToMetafile hostname -- "$hostname"
-        __INTERNAL_LogText "Hostname      : ${hostname}" LOG 2> /dev/null
+        __INTERNAL_LogText "    Hostname      : ${hostname}" 2> /dev/null
     }
 
     # Architecture # MEETING is it the correct way?
     local arch=$(uname -i 2>/dev/null || uname -m)
     [[ -n "$arch" ]] && {
         __INTERNAL_WriteToMetafile arch -- "$arch"
-        __INTERNAL_LogText "Architecture  : ${arch}" LOG 2> /dev/null
+        __INTERNAL_LogText "    Architecture  : ${arch}" 2> /dev/null
     }
 
     local line size
@@ -619,7 +619,7 @@ __INTERNAL_CreateHeader(){
             fi
         done < "/proc/cpuinfo"
         __INTERNAL_WriteToMetafile hw_cpu -- "$count x $type"
-        __INTERNAL_LogText "CPU           : $count x $type" LOG 2> /dev/null
+        __INTERNAL_LogText "    CPU           : $count x $type" 2> /dev/null
     fi
 
     # RAM size
@@ -633,7 +633,7 @@ __INTERNAL_CreateHeader(){
             fi
         done < "/proc/meminfo"
         __INTERNAL_WriteToMetafile hw_ram -- "$size MB"
-        __INTERNAL_LogText "Mem           : ${size} MB" LOG 2> /dev/null
+        __INTERNAL_LogText "    Mem           : ${size} MB" 2> /dev/null
     fi
 
     # HDD size
@@ -647,7 +647,7 @@ __INTERNAL_CreateHeader(){
     [[ -n "$size" ]] && {
         size="$(echo "$((size*100/1024/1024))" | sed -r 's/..$/.\0/') GB"
         __INTERNAL_WriteToMetafile hw_hdd -- "$size"
-        __INTERNAL_LogText "HDD           : ${size}" LOG 2> /dev/null
+        __INTERNAL_LogText "    HDD           : ${size}" 2> /dev/null
     }
 
     # Purpose
