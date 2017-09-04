@@ -210,9 +210,40 @@ rlJournalEnd(){
     fi
 
     echo "#End of metafile" >> $BEAKERLIB_METAFILE
-    $__INTERNAL_JOURNALIST --metafile "$BEAKERLIB_METAFILE" --journal "$BEAKERLIB_JOURNAL"
+
+    rlJournalWriteXML
 
 }
+
+
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+# rlJournalWriteXML
+# ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+: <<'=cut'
+=pod
+
+=head3 rlJournalWriteXML
+
+Create XML version of the journal from internal structure.
+
+    rlJournalWriteXML [--xslt file]
+
+=over
+
+=item --xslt file
+
+Use xslt file to generate different journal format, e.g xUnit.
+
+=back
+
+=cut
+
+rlJournalWriteXML() {
+    local xslt=''
+    [[ "$1" == "--xslt" ]] && [[ -r "$2" ]] && xslt="$1 $2"
+    $__INTERNAL_JOURNALIST $xslt --metafile "$BEAKERLIB_METAFILE" --journal "$BEAKERLIB_JOURNAL"
+}
+
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # rlJournalPrint
