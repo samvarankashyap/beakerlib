@@ -64,7 +64,7 @@ class Stack:
 def saveJournal(journal, journal_path):
     try:
         output = open(journal_path, 'wb')
-        output.write(etree.tostring(journal, xml_declaration=True, encoding='utf-8'))
+        output.write(etree.tostring(journal, xml_declaration=True, encoding='utf-8', pretty_print=True))
         output.close()
         return 0
     except IOError, e:
@@ -91,7 +91,7 @@ def getStartEndTime(element):
         if child.get("timestamp"):
             if starttime == "":
                 starttime = child.get("timestamp")
-            endtime=child.get("timestamp")
+            endtime = child.get("timestamp")
 
     return starttime, endtime
 
@@ -162,16 +162,20 @@ def createElement(element, attributes, content):
 
 # TODO comment
 def createJournalXML(options):
-    try:
-        fh = open(options.metafile, 'r+')
-    except IOError as e:
-        sys.stderr.write('Failed to open queue file with' + str(e), 'FAIL')
-        return 1
+    # If --metafile option is used read from it, else read standard input
+    if options.metafile:
+        try:
+            fh = open(options.metafile, 'r+')
+        except IOError as e:
+            sys.stderr.write('Failed to open queue file with' + str(e), 'FAIL')
+            return 1
 
-    lines = fh.readlines()
-    fh.close()
+        lines = fh.readlines()
+        fh.close()
+    else:
+        lines = sys.stdin.readlines()
 
-    # Indent level of previous line, initialized as -1
+    # Indent level of previous line, initialized to -1
     old_indent = -1
     # Initialize root element
     previous_el = etree.Element("BEAKER_TEST")
@@ -217,7 +221,7 @@ def createJournalXML(options):
                 starttime, endtime = getStartEndTime(previous_el)
                 # If the closing element has a --timestamp, this value will be used as endtime
                 if "timestamp" in attributes:
-                    endtime=attributes["timestamp"]
+                    endtime = attributes["timestamp"]
                 # Updating attributes found on closing line
                 for key, value in attributes.iteritems():
                     previous_el.set(key, value)
@@ -248,12 +252,10 @@ def createJournalXML(options):
     starttime, endtime = getStartEndTime(previous_el)
     addStartEndTime(previous_el, starttime, endtime)
 
-
     # Updating start/end time of the whole test
     starttime, endtime = getStartEndTime(journal)
     journal.xpath("starttime")[0].text = starttime
     journal.xpath("endtime")[0].text = endtime
-
 
     # XSL transformation
     if options.xslt:
@@ -261,14 +263,18 @@ def createJournalXML(options):
         transform = etree.XSLT(xslt)
         journal = transform(journal)
 
-    # Save journal to a file and return its exit code
-    return saveJournal(journal, options.journal)
+    if options.journal:
+        # Save journal to a file and return its exit code
+        return saveJournal(journal, options.journal)
+    else:
+        # Write the XML on standard output
+        sys.stdout.write(etree.tostring(journal, xml_declaration=True, encoding='utf-8', pretty_print=True))
+        return 0
 
 
 def main():
-    # TODO write help?
     DESCRIPTION = "Tool creating journal out of metafile."
-    usage=__file__+" --metafile=METAFILE --journal=JOURNAL"
+    usage = __file__+" --metafile=METAFILE --journal=JOURNAL"
     optparser = OptionParser(description=DESCRIPTION, usage=usage)
 
     optparser.add_option("-j", "--journal", default=None, dest="journal", metavar="JOURNAL")
@@ -277,13 +283,8 @@ def main():
 
     (options, args) = optparser.parse_args()
 
-    if options.journal is None:
-        sys.stderr.write("--journal option not provided.\nExiting unsuccessfully.\n")
-        exit(1)
-    if options.metafile is None:
-        sys.stderr.write("--metafile option not provided.\nExiting unsuccessfully.\n")
-        exit(1)
-    elif not os.path.exists(options.metafile):
+    # If metafile option is used, check if the value exists
+    if options.metafile and not os.path.exists(options.metafile):
         sys.stderr.write("Metafile " + options.metafile + " does not exist.\nExiting unsuccessfully.\n")
         exit(1)
 
