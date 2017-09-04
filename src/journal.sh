@@ -298,8 +298,8 @@ Print the content of the journal in pretty text format.
 
 =item --full-journal
 
-With this option, additional items like some HW information
-will be printed in the journal.
+The options is now deprecated, has no effect and will be removed in one
+of future versions.
 
 =back
 
@@ -346,15 +346,10 @@ Example:
 # call rlJournalPrint
 rlJournalPrintText(){
     __INTERNAL_ENDTIME=$__INTERNAL_TIMESTAMP
+    local duration=$(($__INTERNAL_ENDTIME - $__INTERNAL_STARTTIME))
     echo -e "\n\n\n\n"
-    cat $__INTERNAL_BEAKERLIB_JOURNAL_COLORED | sed -r "s/__INTERNAL_ENDTIME/$(printf "%($__INTERNAL_timeformat)T" $__INTERNAL_ENDTIME)/"
+    cat $__INTERNAL_BEAKERLIB_JOURNAL_COLORED | sed -r "s/__INTERNAL_ENDTIME/$(printf "%($__INTERNAL_timeformat)T" $__INTERNAL_ENDTIME)/;s/__INTERNAL_DURATION/$duration seconds/"
     return 0
-
-    local SEVERITY=${LOG_LEVEL:-"INFO"}
-    local FULL_JOURNAL=''
-    [ "$1" == '--full-journal' ] && FULL_JOURNAL='--full-journal'
-    [ "$DEBUG" == 'true' -o "$DEBUG" == '1' ] && SEVERITY="DEBUG"
-    #$__INTERNAL_JOURNALIST printlog --severity $SEVERITY $FULL_JOURNAL
 }
 
 # TODO_IMP implement with metafile solution
@@ -582,6 +577,7 @@ __INTERNAL_CreateHeader(){
     __INTERNAL_WriteToMetafile endtime
     __INTERNAL_LogText "Test started  : $(printf "%($__INTERNAL_timeformat)T" $__INTERNAL_STARTTIME)" LOG 2> /dev/null
     __INTERNAL_LogText "Test finished : __INTERNAL_ENDTIME" LOG 2> /dev/null
+    __INTERNAL_LogText "Test duration : __INTERNAL_DURATION" LOG 2> /dev/null
 
     # Test name
     # TODO: have we set TEST before if it was empty?
@@ -735,46 +731,6 @@ rljPrintHeadLog(){
     __INTERNAL_LogText "\n::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::"
     __INTERNAL_LogText "$1" LOG
     __INTERNAL_LogText "::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::\n"
-}
-
-# TODO: will be completely rewritten using coninueously generated log file
-rljPrintTestProtocol(){
-    rljPrintHeadLog "TEST PROTOCOL"
-    __INTERNAL_LogText "Package       : $package"
-    __INTERNAL_LogText "Installed     : $(rljGetRPM "$package")"
-    __INTERNAL_LogText "beakerlib RPM : $beakerlib_rpm"
-    __INTERNAL_LogText "bl-redhat RPM : $beakerlib_redhat_rpm"
-
-    STARTTIME=""
-    ENDTIME=""
-    # MEETING What if metafile will be too big? Isn't it better to read it directly from file in loop bellow?
-    # MEETING ...might be slower but more reliable
-    metafile=$(cat "$BEAKERLIB_METAFILE")
-
-    # Getting first and last timestamp from metafile
-    #while read -r line
-    #do
-    #    if [[ "$line" =~ --timestamp=\"(.*)\" ]]; then
-    #        if [ "$STARTTIME" == "" ]; then
-    #            STARTTIME="${BASH_REMATCH[1]}"
-    #        fi
-    #        ENDTIME="${BASH_REMATCH[1]}"
-    #    fi
-    #done < <(echo "$metafile")
-
-    STARTTIME=$(date -d "@$STARTTIME" '+%Y-%m-%d %H:%M:%S %Z')
-    ENDTIME=$(date -d "@$ENDTIME" '+%Y-%m-%d %H:%M:%S %Z')
-
-    __INTERNAL_LogText "Test started  : $STARTTIME"
-    __INTERNAL_LogText "Test finished : $ENDTIME"
-    __INTERNAL_LogText "Test name     : $TEST"
-    __INTERNAL_LogText "Distro        : $release"
-    __INTERNAL_LogText "Hostname      : $hostname"
-    __INTERNAL_LogText "Architecture  : $arch"
-
-    rljPrintHeadLog "Test description"
-    echo "$purpose"
-
 }
 
 __INTERNAL_PersistentDataSave() {
