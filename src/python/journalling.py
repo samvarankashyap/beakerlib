@@ -73,7 +73,7 @@ def saveJournal(journal, journal_path):
 
 
 # TODO check if it is done when implicitly ending paired element(closephase without --result=...)
-# TODO description
+# Adds attributes starttime and endtime to a element
 def addStartEndTime(element, starttime, endtime):
     element.set("starttime", starttime)
     element.set("endtime", endtime)
@@ -151,7 +151,8 @@ def parseLine(line):
     return indent, element, attributes, content
 
 
-# TODO comment
+# Returns xml element created with
+# information given as parameters
 def createElement(element, attributes, content):
     new_el = etree.Element(element)
     new_el.text = content
@@ -160,7 +161,9 @@ def createElement(element, attributes, content):
     return new_el
 
 
-# TODO comment
+# Main loop of the program
+# Reads metafile or stdin line by line and adds
+# information from them into XML document
 def createJournalXML(options):
     # If --metafile option is used read from it, else read standard input
     if options.metafile:
@@ -268,8 +271,7 @@ def createJournalXML(options):
         return saveJournal(journal, options.journal)
     else:
         # Write the XML on standard output
-        sys.stdout.write(etree.tostring(journal, xml_declaration=True, encoding='utf-8', pretty_print=True))
-        return 0
+        return sys.stdout.write(etree.tostring(journal, xml_declaration=True, encoding='utf-8', pretty_print=True))
 
 
 def main():
