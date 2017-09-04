@@ -703,11 +703,6 @@ __INTERNAL_CreateHeader(){
 }
 
 
-__INTERNAL_jHash() {
-  echo -n "$1" | base64 -w 0
-}
-
-
 # Encode arguments' values into base64
 # Adds --timestamp argument and indent
 # writes it into metafile
