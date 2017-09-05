@@ -56,10 +56,12 @@ result function is included as well.
 . $BEAKERLIB/journal.sh
 
 __INTERNAL_LogAndJournalPass() {
+    __INTERNAL_LogText "$1 $2" "PASS"
     rljAddTest "$1 $2" "PASS" "$3"
 }
 
 __INTERNAL_LogAndJournalFail() {
+    __INTERNAL_LogText "$1 $2" "FAIL"
     rljAddTest "$1 $2" "FAIL" "$3"
 }
 
@@ -68,11 +70,9 @@ __INTERNAL_LogAndJournalFail() {
 
 __INTERNAL_ConditionalAssert() {
     if [ "$2" == "0" ]; then
-        __INTERNAL_LogText "$1" "PASS"
         __INTERNAL_LogAndJournalPass "$1" "$3" "$4"
         return 0
     else
-        __INTERNAL_LogText "$1" "FAIL"
         __INTERNAL_LogAndJournalFail "$1" "$3" "$4"
         return 1
     fi
