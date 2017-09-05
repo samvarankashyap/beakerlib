@@ -103,14 +103,18 @@ rlJournalStart(){
     # Initialization of variables holding current state of the test
     # TODO: rename to __INTERNAL_
     export __INTERNAL_METAFILE_INDENT_LEVEL=0
-    __INTERNAL_CURRENT_PHASE_TYPE=()
-    __INTERNAL_CURRENT_PHASE_NAME=()
+    __INTERNAL_PHASE_TYPE=()
+    __INTERNAL_PHASE_NAME=()
     export __INTERNAL_PRESISTENT_DATA="$BEAKERLIB_DIR/PersistentData"
     export __INTERNAL_JOURNAL_OPEN=''
     __INTERNAL_PersistentDataLoad
-    export __INTERNAL_PHASES_FAILED_COUNT=0
+    export __INTERNAL_PHASES_FAILED=0
+    export __INTERNAL_PHASES_PASSED=0
+    export __INTERNAL_PHASES_SKIPED=0
     export __INTERNAL_TEST_STATE=0
-    __INTERNAL_PHASE_STATE=()
+    __INTERNAL_PHASE_FAILED=()
+    __INTERNAL_PHASE_PASSED=()
+    __INTERNAL_PHASE_STARTTIME=()
     export __INTERNAL_PHASE_OPEN=0
 
     if [[ -z "$__INTERNAL_JOURNAL_OPEN" ]]; then
@@ -430,7 +434,7 @@ The precise number is set to ECODE variable.
 
 rlGetPhaseState(){
     __INTERNAL_PersistentDataLoad
-    ECODE=$__INTERNAL_PHASE_STATE
+    ECODE=$__INTERNAL_PHASE_FAILED
     rlLogDebug "rlGetPhaseState: $ECODE failed assert(s) in phase"
     [[ $ECODE -gt 255 ]] && return 255 || return $ECODE
 }
@@ -449,16 +453,20 @@ rljAddPhase(){
 
     if [[ -z "$BEAKERLIB_NESTED_PHASES" ]]; then
       __INTERNAL_METAFILE_INDENT_LEVEL=2
-      __INTERNAL_CURRENT_PHASE_TYPE=( "$1" )
-      __INTERNAL_CURRENT_PHASE_NAME=( "$MSG" )
-      __INTERNAL_PHASE_STATE=( 0 )
-      __INTERNAL_PHASE_OPEN=${#__INTERNAL_CURRENT_PHASE_NAME[@]}
+      __INTERNAL_PHASE_TYPE=( "$1" )
+      __INTERNAL_PHASE_NAME=( "$MSG" )
+      __INTERNAL_PHASE_FAILED=( 0 )
+      __INTERNAL_PHASE_PASSED=( 0 )
+      __INTERNAL_PHASE_STARTTIME=( $__INTERNAL_TIMESTAMP )
+      __INTERNAL_PHASE_OPEN=${#__INTERNAL_PHASE_NAME[@]}
     else
       let __INTERNAL_METAFILE_INDENT_LEVEL+=1
-      __INTERNAL_CURRENT_PHASE_TYPE=( "$1" "${__INTERNAL_CURRENT_PHASE_TYPE[@]}" )
-      __INTERNAL_CURRENT_PHASE_NAME=( "$MSG" "${__INTERNAL_CURRENT_PHASE_NAME[@]}" )
-      __INTERNAL_PHASE_STATE=( 0 "${__INTERNAL_PHASE_STATE[@]}" )
-      __INTERNAL_PHASE_OPEN=${#__INTERNAL_CURRENT_PHASE_NAME[@]}
+      __INTERNAL_PHASE_TYPE=( "$1" "${__INTERNAL_PHASE_TYPE[@]}" )
+      __INTERNAL_PHASE_NAME=( "$MSG" "${__INTERNAL_PHASE_NAME[@]}" )
+      __INTERNAL_PHASE_FAILED=( 0 "${__INTERNAL_PHASE_FAILED[@]}" )
+      __INTERNAL_PHASE_PASSED=( 0 "${__INTERNAL_PHASE_PASSED[@]}" )
+      __INTERNAL_PHASE_STARTTIME=( $__INTERNAL_TIMESTAMP "${__INTERNAL_PHASE_STARTTIME[@]}" )
+      __INTERNAL_PHASE_OPEN=${#__INTERNAL_PHASE_NAME[@]}
     fi
     __INTERNAL_PersistentDataSave
 }
@@ -469,35 +477,45 @@ rljClosePhase(){
     local result
     local logfile="$BEAKERLIB_DIR/journal.txt"
 
-    local score=$__INTERNAL_PHASE_STATE
+    local score=$__INTERNAL_PHASE_FAILED
     # Result
-    if [ $__INTERNAL_PHASE_STATE -eq 0 ]; then
+    if [ $__INTERNAL_PHASE_FAILED -eq 0 ]; then
         result="PASS"
+        let __INTERNAL_PHASES_PASSED++
     else
-        result="$__INTERNAL_CURRENT_PHASE_TYPE"
-        let __INTERNAL_PHASES_FAILED_COUNT+=1
+        result="$__INTERNAL_PHASE_TYPE"
+        let __INTERNAL_PHASES_FAILED+=1
     fi
 
-    local name="$__INTERNAL_CURRENT_PHASE_NAME"
+    local name="$__INTERNAL_PHASE_NAME"
 
     rlLogDebug "rljClosePhase: Phase $name closed"
+    local endtime; printf -v endtime "%(%s)T" -1
+    __INTERNAL_LogText "Duration: $((endtime - __INTERNAL_PHASE_STARTTIME))s" LOG
+    __INTERNAL_LogText "Assertions: $__INTERNAL_PHASE_PASSED good, $__INTERNAL_PHASE_FAILED bad" LOG
+    __INTERNAL_LogText "RESULT: $name" $result
     local logfile=""  # TODO_IMP implement creation of logfile!
     rlReport "$name" "$result" "$score" "$logfile"
 
     # Reset of state variables
     if [[ -z "$BEAKERLIB_NESTED_PHASES" ]]; then
       __INTERNAL_METAFILE_INDENT_LEVEL=1
-      __INTERNAL_CURRENT_PHASE_TYPE=()
-      __INTERNAL_CURRENT_PHASE_NAME=()
-      __INTERNAL_PHASE_STATE=()
+      __INTERNAL_PHASE_TYPE=()
+      __INTERNAL_PHASE_NAME=()
+      __INTERNAL_PHASE_FAILED=()
+      __INTERNAL_PHASE_PASSED=()
+      __INTERNAL_PHASE_STARTTIME=()
     else
       let __INTERNAL_METAFILE_INDENT_LEVEL-=1
-      unset __INTERNAL_CURRENT_PHASE_TYPE[0]; __INTERNAL_CURRENT_PHASE_TYPE=( "${__INTERNAL_CURRENT_PHASE_TYPE[@]}" )
-      unset __INTERNAL_CURRENT_PHASE_NAME[0]; __INTERNAL_CURRENT_PHASE_NAME=( "${__INTERNAL_CURRENT_PHASE_NAME[@]}" )
-      [[ ${#__INTERNAL_PHASE_STATE[@]} -gt 1 ]] && let __INTERNAL_PHASE_STATE[1]+=__INTERNAL_PHASE_STATE[0]
-      unset __INTERNAL_PHASE_STATE[0]; __INTERNAL_PHASE_STATE=( "${__INTERNAL_PHASE_STATE[@]}" )
+      unset __INTERNAL_PHASE_TYPE[0]; __INTERNAL_PHASE_TYPE=( "${__INTERNAL_PHASE_TYPE[@]}" )
+      unset __INTERNAL_PHASE_NAME[0]; __INTERNAL_PHASE_NAME=( "${__INTERNAL_PHASE_NAME[@]}" )
+      [[ ${#__INTERNAL_PHASE_FAILED[@]} -gt 1 ]] && let __INTERNAL_PHASE_FAILED[1]+=__INTERNAL_PHASE_FAILED[0]
+      unset __INTERNAL_PHASE_FAILED[0]; __INTERNAL_PHASE_FAILED=( "${__INTERNAL_PHASE_FAILED[@]}" )
+      [[ ${#__INTERNAL_PHASE_PASSED[@]} -gt 1 ]] && let __INTERNAL_PHASE_PASSED[1]+=__INTERNAL_PHASE_PASSED[0]
+      unset __INTERNAL_PHASE_PASSED[0]; __INTERNAL_PHASE_PASSED=( "${__INTERNAL_PHASE_PASSED[@]}" )
+      unset __INTERNAL_PHASE_STARTTIME[0]; __INTERNAL_PHASE_STARTTIME=( "${__INTERNAL_PHASE_STARTTIME[@]}" )
     fi
-    __INTERNAL_PHASE_OPEN=${#__INTERNAL_CURRENT_PHASE_NAME[@]}
+    __INTERNAL_PHASE_OPEN=${#__INTERNAL_PHASE_NAME[@]}
     # Updating phase element
     __INTERNAL_WriteToMetafile --result "$result" --score "$score"
     __INTERNAL_PersistentDataSave
@@ -509,19 +527,17 @@ rljClosePhase(){
 rljAddTest(){
     __INTERNAL_PersistentDataLoad
     if [ $__INTERNAL_PHASE_OPEN -eq 0 ]; then
-        rljAddPhase "FAIL" "Asserts collected outside of a phase"
-        __INTERNAL_WriteToMetafile test --message "TEST BUG: Assertion not in phase" -- "FAIL" >&2
-        __INTERNAL_LogText "TEST BUG: Assertion not in phase" "FAIL"
-        __INTERNAL_WriteToMetafile test --message "$1" ${3:+--command "$3"} -- "$2" >&2
-        __INTERNAL_LogText "$1" "$2"
-        let __INTERNAL_TEST_STATE+=1
-        let __INTERNAL_PHASE_STATE+=1
-        rljClosePhase
+        rlPhaseStart "FAIL" "Asserts collected outside of a phase"
+        rlFail "TEST BUG: Assertion not in phase"
+        rljAddTest "$@"
+        rlPhaseEnd
     else
         __INTERNAL_WriteToMetafile test --message "$1" ${3:+--command "$3"} -- "$2" >&2
-        if [ "$2" != "PASS" ]; then
+        if [ "$2" == "PASS" ]; then
+            let __INTERNAL_PHASE_PASSED+=1
+        else
             let __INTERNAL_TEST_STATE+=1
-            let __INTERNAL_PHASE_STATE+=1
+            let __INTERNAL_PHASE_FAILED+=1
         fi
     fi
     __INTERNAL_PersistentDataSave
@@ -771,10 +787,12 @@ __INTERNAL_PersistentDataSave() {
   cat > "$__INTERNAL_PRESISTENT_DATA" <<EOF
 __INTERNAL_STRATTIME=$__INTERNAL_STRATTIME
 __INTERNAL_TEST_STATE=$__INTERNAL_TEST_STATE
-__INTERNAL_PHASES_FAILED_COUNT=$__INTERNAL_PHASES_FAILED_COUNT
+__INTERNAL_PHASES_FAILED=$__INTERNAL_PHASES_FAILED
 __INTERNAL_JOURNAL_OPEN=$__INTERNAL_JOURNAL_OPEN
 EOF
-declare -p __INTERNAL_PHASE_STATE >> $__INTERNAL_PRESISTENT_DATA
+declare -p __INTERNAL_PHASE_FAILED >> $__INTERNAL_PRESISTENT_DATA
+declare -p __INTERNAL_PHASE_PASSED >> $__INTERNAL_PRESISTENT_DATA
+declare -p __INTERNAL_PHASE_STARTTIME >> $__INTERNAL_PRESISTENT_DATA
 }
 
 __INTERNAL_PersistentDataLoad() {
