@@ -568,10 +568,10 @@ __INTERNAL_GetPackageDetails() {
 
 rljRpmLog(){
     local package_details
-    if package_details=( __INTERNAL_GetPackageDetails "$1" ); then
-        __INTERNAL_WriteToMetafile pkgnotinstalled -- "$1"
-    else
+    if package_details=( $(__INTERNAL_GetPackageDetails "$1") ); then
         __INTERNAL_WriteToMetafile pkgdetails --sourcerpm "${package_details[1]}" -- "${package_details[0]}"
+    else
+        __INTERNAL_WriteToMetafile pkgnotinstalled -- "$1"
     fi
 }
 
