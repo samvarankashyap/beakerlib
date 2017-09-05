@@ -112,6 +112,7 @@ rlJournalStart(){
     export __INTERNAL_PHASES_PASSED=0
     export __INTERNAL_PHASES_SKIPED=0
     export __INTERNAL_TEST_STATE=0
+    __INTERNAL_PHASE_TXTLOG_START=()
     __INTERNAL_PHASE_FAILED=()
     __INTERNAL_PHASE_PASSED=()
     __INTERNAL_PHASE_STARTTIME=()
@@ -446,6 +447,7 @@ rlGetPhaseState(){
 rljAddPhase(){
     __INTERNAL_PersistentDataLoad
     local MSG=${2:-"Phase of $1 type"}
+    local TXTLOG_START=$(wc -l $__INTERNAL_BEAKERLIB_JOURNAL_TXT)
     rlLogDebug "rljAddPhase: Phase $MSG started"
     __INTERNAL_WriteToMetafile phase --name "$MSG" --type "$1" >&2
     # Printing
@@ -458,6 +460,7 @@ rljAddPhase(){
       __INTERNAL_PHASE_FAILED=( 0 )
       __INTERNAL_PHASE_PASSED=( 0 )
       __INTERNAL_PHASE_STARTTIME=( $__INTERNAL_TIMESTAMP )
+      __INTERNAL_PHASE_TXTLOG_START=( $(wc -l $__INTERNAL_BEAKERLIB_JOURNAL_TXT) )
       __INTERNAL_PHASE_OPEN=${#__INTERNAL_PHASE_NAME[@]}
     else
       let __INTERNAL_METAFILE_INDENT_LEVEL+=1
@@ -466,6 +469,7 @@ rljAddPhase(){
       __INTERNAL_PHASE_FAILED=( 0 "${__INTERNAL_PHASE_FAILED[@]}" )
       __INTERNAL_PHASE_PASSED=( 0 "${__INTERNAL_PHASE_PASSED[@]}" )
       __INTERNAL_PHASE_STARTTIME=( $__INTERNAL_TIMESTAMP "${__INTERNAL_PHASE_STARTTIME[@]}" )
+      __INTERNAL_PHASE_TXTLOG_START=( $TXTLOG_START "${__INTERNAL_PHASE_TXTLOG_START[@]}" )
       __INTERNAL_PHASE_OPEN=${#__INTERNAL_PHASE_NAME[@]}
     fi
     __INTERNAL_PersistentDataSave
@@ -497,8 +501,10 @@ rljClosePhase(){
     __INTERNAL_LogText "Duration: $((endtime - __INTERNAL_PHASE_STARTTIME))s" LOG
     __INTERNAL_LogText "Assertions: $__INTERNAL_PHASE_PASSED good, $__INTERNAL_PHASE_FAILED bad" LOG
     __INTERNAL_LogText "RESULT: $name" $result
-    local logfile=""  # TODO_IMP implement creation of logfile!
+    local logfile="$(mktemp)"
+    tail -n +$((__INTERNAL_PHASE_TXTLOG_START+1)) $__INTERNAL_BEAKERLIB_JOURNAL_TXT > $logfile
     rlReport "$name" "$result" "$score" "$logfile"
+    rm -f $logfile
 
     # Reset of state variables
     if [[ -z "$BEAKERLIB_NESTED_PHASES" ]]; then
@@ -508,6 +514,7 @@ rljClosePhase(){
       __INTERNAL_PHASE_FAILED=()
       __INTERNAL_PHASE_PASSED=()
       __INTERNAL_PHASE_STARTTIME=()
+      __INTERNAL_PHASE_TXTLOG_START=()
     else
       let __INTERNAL_METAFILE_INDENT_LEVEL-=1
       unset __INTERNAL_PHASE_TYPE[0]; __INTERNAL_PHASE_TYPE=( "${__INTERNAL_PHASE_TYPE[@]}" )
@@ -517,6 +524,7 @@ rljClosePhase(){
       [[ ${#__INTERNAL_PHASE_PASSED[@]} -gt 1 ]] && let __INTERNAL_PHASE_PASSED[1]+=__INTERNAL_PHASE_PASSED[0]
       unset __INTERNAL_PHASE_PASSED[0]; __INTERNAL_PHASE_PASSED=( "${__INTERNAL_PHASE_PASSED[@]}" )
       unset __INTERNAL_PHASE_STARTTIME[0]; __INTERNAL_PHASE_STARTTIME=( "${__INTERNAL_PHASE_STARTTIME[@]}" )
+      unset __INTERNAL_PHASE_TXTLOG_START[0]; __INTERNAL_PHASE_TXTLOG_START=( "${__INTERNAL_PHASE_TXTLOG_START[@]}" )
     fi
     __INTERNAL_PHASE_OPEN=${#__INTERNAL_PHASE_NAME[@]}
     # Updating phase element
@@ -796,6 +804,7 @@ EOF
 declare -p __INTERNAL_PHASE_FAILED >> $__INTERNAL_PRESISTENT_DATA
 declare -p __INTERNAL_PHASE_PASSED >> $__INTERNAL_PRESISTENT_DATA
 declare -p __INTERNAL_PHASE_STARTTIME >> $__INTERNAL_PRESISTENT_DATA
+declare -p __INTERNAL_PHASE_TXTLOG_START >> $__INTERNAL_PRESISTENT_DATA
 }
 
 __INTERNAL_PersistentDataLoad() {
