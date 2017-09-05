@@ -473,7 +473,10 @@ rljAddPhase(){
 
 rljClosePhase(){
     __INTERNAL_PersistentDataLoad
-  # TODO: check opened
+    [[ $__INTERNAL_PHASE_OPEN -eq 0 ]] && {
+      rlLogError "nothing to close - no open phase"
+      retrun 1
+    }
     local result
     local logfile="$BEAKERLIB_DIR/journal.txt"
 
