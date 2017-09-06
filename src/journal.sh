@@ -543,6 +543,7 @@ rljAddTest(){
         rljAddTest "$@"
         rlPhaseEnd
     else
+        __INTERNAL_LogText "$1" "$2"
         __INTERNAL_WriteToMetafile test --message "$1" ${3:+--command "$3"} -- "$2" >&2
         if [ "$2" == "PASS" ]; then
             let __INTERNAL_PHASE_PASSED+=1
