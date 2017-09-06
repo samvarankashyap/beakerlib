@@ -111,6 +111,7 @@ rlJournalStart(){
     export __INTERNAL_PHASES_FAILED=0
     export __INTERNAL_PHASES_PASSED=0
     export __INTERNAL_PHASES_SKIPED=0
+    export __INTERNAL_PHASES_WORST_RESULT='PASS'
     export __INTERNAL_TEST_STATE=0
     __INTERNAL_PHASE_TXTLOG_START=()
     __INTERNAL_PHASE_FAILED=()
@@ -201,6 +202,7 @@ rlJournalEnd(){
     fi
 
     if [ -n "$TESTID" ] ; then
+        rlJournalWriteXML
         $BEAKERLIB_COMMAND_SUBMIT_LOG -T $TESTID -l $BEAKERLIB_JOURNAL \
         || rlLogError "rlJournalEnd: Submit wasn't successful"
     else
@@ -210,9 +212,7 @@ rlJournalEnd(){
     fi
 
     echo "#End of metafile" >> $BEAKERLIB_METAFILE
-
     rlJournalWriteXML
-
 }
 
 
@@ -388,6 +388,11 @@ rlJournalPrintText(){
     local duration=$(($__INTERNAL_ENDTIME - $__INTERNAL_STARTTIME))
     echo -e "\n\n\n\n"
     cat $__INTERNAL_BEAKERLIB_JOURNAL_COLORED | sed -r "s/__INTERNAL_ENDTIME/$(printf "%($__INTERNAL_timeformat)T" $__INTERNAL_ENDTIME)/;s/__INTERNAL_DURATION/$duration seconds/"
+
+    __INTERNAL_PrintHeadLog "${TEST}"
+    __INTERNAL_LogText "Phases: $__INTERNAL_PHASES_PASSED good, $__INTERNAL_PHASES_FAILED bad" LOG
+    __INTERNAL_LogText "RESULT: $TEST" $__INTERNAL_PHASES_WORST_RESULT
+
     return 0
 }
 
@@ -475,6 +480,18 @@ rljAddPhase(){
     __INTERNAL_PersistentDataSave
 }
 
+__INTERNAL_SET_WORST_PHASE_RESULT() {
+    local results='PASS WARN FAIL'
+    [[ "$results" =~ $(echo "$__INTERNAL_PHASES_WORST_RESULT.*") ]] && {
+      local possible_results="$BASH_REMATCH"
+      rlLogDebug "$FUNCNAME(): possible worst results are now $possible_results, current result is $1"
+      [[ "$possible_results" =~ $1 ]] && {
+          rlLogDebug "$FUNCNAME(): changing worst phase result from $__INTERNAL_PHASES_WORST_RESULT to $1"
+          __INTERNAL_PHASES_WORST_RESULT="$1"
+      }
+    }
+}
+
 rljClosePhase(){
     __INTERNAL_PersistentDataLoad
     [[ $__INTERNAL_PHASE_OPEN -eq 0 ]] && {
@@ -486,7 +503,7 @@ rljClosePhase(){
 
     local score=$__INTERNAL_PHASE_FAILED
     # Result
-    if [ $__INTERNAL_PHASE_FAILED -eq 0 ]; then
+    if [ $score -eq 0 ]; then
         result="PASS"
         let __INTERNAL_PHASES_PASSED++
     else
@@ -494,10 +511,14 @@ rljClosePhase(){
         let __INTERNAL_PHASES_FAILED+=1
     fi
 
+    __INTERNAL_SET_WORST_PHASE_RESULT "$result"
+
     local name="$__INTERNAL_PHASE_NAME"
 
     rlLogDebug "rljClosePhase: Phase $name closed"
     local endtime; printf -v endtime "%(%s)T" -1
+    __INTERNAL_LogText "________________________________________________________________________________"
+    #__INTERNAL_LogText "--------------------------------------------------------------------------------"
     __INTERNAL_LogText "Duration: $((endtime - __INTERNAL_PHASE_STARTTIME))s" LOG
     __INTERNAL_LogText "Assertions: $__INTERNAL_PHASE_PASSED good, $__INTERNAL_PHASE_FAILED bad" LOG
     __INTERNAL_LogText "RESULT: $name" $result
@@ -642,10 +663,9 @@ __INTERNAL_CreateHeader(){
     __INTERNAL_LogText "    Test duration : __INTERNAL_DURATION" 2> /dev/null
 
     # Test name
-    # TODO: have we set TEST before if it was empty?
-    local testname="${TEST:-unknown}"
-    __INTERNAL_WriteToMetafile testname -- "${testname}"
-    __INTERNAL_LogText "    Test name     : ${testname}" 2> /dev/null
+    TEST="${TEST:-unknown}"
+    __INTERNAL_WriteToMetafile testname -- "${TEST}"
+    __INTERNAL_LogText "    Test name     : ${TEST}" 2> /dev/null
 
     # OS release
     local release=$(cat /etc/redhat-release)
