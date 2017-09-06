@@ -101,7 +101,6 @@ rlJournalStart(){
     touch $BEAKERLIB_METAFILE
 
     # Initialization of variables holding current state of the test
-    # TODO: rename to __INTERNAL_
     export __INTERNAL_METAFILE_INDENT_LEVEL=0
     __INTERNAL_PHASE_TYPE=()
     __INTERNAL_PHASE_NAME=()
@@ -518,7 +517,6 @@ rljClosePhase(){
     rlLogDebug "rljClosePhase: Phase $name closed"
     local endtime; printf -v endtime "%(%s)T" -1
     __INTERNAL_LogText "________________________________________________________________________________"
-    #__INTERNAL_LogText "--------------------------------------------------------------------------------"
     __INTERNAL_LogText "Duration: $((endtime - __INTERNAL_PHASE_STARTTIME))s" LOG
     __INTERNAL_LogText "Assertions: $__INTERNAL_PHASE_PASSED good, $__INTERNAL_PHASE_FAILED bad" LOG
     __INTERNAL_LogText "RESULT: $name" $result
@@ -624,9 +622,6 @@ __INTERNAL_DeterminePackage(){
     return 0
 }
 
-# MEETING check logic of individual operations
-# MEETING rename all vars to BEAKERLIB_... to prevent overwriting them in test?
-# MEETING (they are used later in creating TEST PROTOCOL)
 # Creates header
 __INTERNAL_CreateHeader(){
 
@@ -722,7 +717,7 @@ __INTERNAL_CreateHeader(){
     size=0
     local hdd_regex="^(/[^ ]+) +([0-9]+) +[0-9]+ +[0-9]+ +[0-9]+% +[^ ]+$"
     while read -r line ; do
-        if [[ "$line" =~ $hdd_regex ]]; then   # MEETING bash construct, is it ok?
+        if [[ "$line" =~ $hdd_regex ]]; then
             let size+=BASH_REMATCH[2]
         fi
     done < <(df -k -P --local --exclude-type=tmpfs)
@@ -750,14 +745,12 @@ __INTERNAL_CreateHeader(){
 # Adds --timestamp argument and indent
 # writes it into metafile
 # takes [element] --attribute1 value1 --attribute2 value2 .. [-- "content"]
-# TODO: rename to __INTERNAL_ as it does not need to be visible for user
 __INTERNAL_WriteToMetafile(){
     printf -v __INTERNAL_TIMESTAMP '%(%s)T' -1
     local indent
     local line=""
     local lineraw=''
     local ARGS=("$@")
-    #set | grep ^ARGS=
     local element=''
 
     [[ "${1:0:2}" != "--" ]] && {
@@ -766,18 +759,15 @@ __INTERNAL_WriteToMetafile(){
     }
     local arg
     while [[ $# -gt 0 ]]; do
-      #echo "$1"
       case $1 in
       --)
         line+=" -- \"$(echo -n "$2" | base64 -w 0)\""
-        #lineraw+=" -- \"$2\""
         printf -v lineraw "%s -- %q" "$lineraw" "$2"
         shift 2
         break
         ;;
       --*)
         line+=" $1=\"$(echo -n "$2" | base64 -w 0)\""
-        #lineraw+=" $1=\"$2\""
         printf -v lineraw "%s %s=%q" "$lineraw" "$1" "$2"
         shift
         ;;
@@ -799,7 +789,6 @@ __INTERNAL_WriteToMetafile(){
 
     line="$indent${element:+$element }--timestamp=\"${__INTERNAL_TIMESTAMP}\"$line"
     lineraw="$indent${element:+$element }--timestamp=\"${__INTERNAL_TIMESTAMP}\"$lineraw"
-    #echo "#${lineraw:1}" >&2
     echo "#${lineraw:1}" >> $BEAKERLIB_METAFILE
     echo "$line" >> $BEAKERLIB_METAFILE
 }
