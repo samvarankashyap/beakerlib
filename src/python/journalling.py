@@ -30,21 +30,7 @@ from lxml import etree
 import shlex
 import base64
 
-
-#### MEETING ####
-# TODO look into minidom (pretty print issue)
-# TODO print to stdout if not parameter
-#### END ####
-
-#### metafile format guidelines ####
-# indent must be consistent in which whitespace char is used - currently using spaces, may be changed to tabs
-# indent difference must be done with 1 whitespace char
-# BEAKER_TEST element is included in python, do not use it again in metafile
-# closing a paired element(1 indent less than previous indent) must be done with 1) new element, 2) attribute (e.g.: --result="...") #TODO new element closing not tested
-# "header" must contain <starttime> <endtime> elements, which are updated at the end of the journal creation
-# attribute must match regex --[a-zA-Z0-9]+= (= only containing letters and digits, starts with -- and end with =)
-# attribute --timestamp must contain value of integer representing seconds (UNIX time)
-#### END ####
+# TODO fix xml pretty print
 
 
 class Stack:
@@ -72,7 +58,6 @@ def saveJournal(journal, journal_path):
         return 1
 
 
-# TODO check if it is done when implicitly ending paired element(closephase without --result=...)
 # Adds attributes starttime and endtime to a element
 def addStartEndTime(element, starttime, endtime):
     element.set("starttime", starttime)
@@ -129,8 +114,8 @@ def parseLine(line):
         # if flag is set, string is an elements content
         if CONTENT_FLAG == 1:
             content = base64.b64decode(part)
-            CONTENT_FLAG = 0
-            continue
+            # end parsing after content is stored
+            break
         # test if string is an elements content indicator
         if part == '--':
             CONTENT_FLAG = 1
@@ -232,10 +217,12 @@ def createJournalXML(options):
                 addStartEndTime(previous_el, starttime, endtime)
 
             # Ending paired element and creating new one on the same level as the paired one that just ended
-            elif element != "":  # FIXME possibly breaks stuff?
+            elif element != "":
                 # Updating start and end time
                 starttime, endtime = getStartEndTime(previous_el)
                 addStartEndTime(previous_el, starttime, endtime)
+                # Appending previous element to the element 1 level above
+                el_stack.peek().append(previous_el)
 
                 new_el = createElement(element, attributes, content)
                 previous_el = new_el
@@ -244,7 +231,7 @@ def createJournalXML(options):
         old_indent = indent
 
     # Final appending
-    for elem in el_stack.items:
+    for _ in el_stack.items:
         el_stack.peek().append(previous_el)
         previous_el = el_stack.pop()
 
