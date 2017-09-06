@@ -804,7 +804,7 @@ __INTERNAL_WriteToMetafile(){
     echo "$line" >> $BEAKERLIB_METAFILE
 }
 
-__INTERNAL_PrintHeadLog(){
+__INTERNAL_PrintHeadLog() {
     __INTERNAL_LogText "\n::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::"
     __INTERNAL_LogText "::   $1"
     __INTERNAL_LogText "::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::\n"
@@ -821,6 +821,7 @@ __INTERNAL_STRATTIME=$__INTERNAL_STRATTIME
 __INTERNAL_TEST_STATE=$__INTERNAL_TEST_STATE
 __INTERNAL_PHASES_FAILED=$__INTERNAL_PHASES_FAILED
 __INTERNAL_JOURNAL_OPEN=$__INTERNAL_JOURNAL_OPEN
+__INTERNAL_SET_WORST_PHASE_RESULT=$__INTERNAL_SET_WORST_PHASE_RESULT
 EOF
 declare -p __INTERNAL_PHASE_FAILED >> $__INTERNAL_PRESISTENT_DATA
 declare -p __INTERNAL_PHASE_PASSED >> $__INTERNAL_PRESISTENT_DATA
