@@ -388,9 +388,9 @@ rlJournalPrintText(){
     echo -e "\n\n\n\n"
     cat $__INTERNAL_BEAKERLIB_JOURNAL_COLORED | sed -r "s/__INTERNAL_ENDTIME/$(printf "%($__INTERNAL_timeformat)T" $__INTERNAL_ENDTIME)/;s/__INTERNAL_DURATION/$duration seconds/"
 
-    __INTERNAL_PrintHeadLog "${TEST}"
-    __INTERNAL_LogText "Phases: $__INTERNAL_PHASES_PASSED good, $__INTERNAL_PHASES_FAILED bad" LOG
-    __INTERNAL_LogText "RESULT: $TEST" $__INTERNAL_PHASES_WORST_RESULT
+    __INTERNAL_PrintHeadLog "${TEST}" 2>&1
+    __INTERNAL_LogText "Phases: $__INTERNAL_PHASES_PASSED good, $__INTERNAL_PHASES_FAILED bad" LOG 2>&1
+    __INTERNAL_LogText "RESULT: $TEST" $__INTERNAL_PHASES_WORST_RESULT 2>&1
 
     return 0
 }
