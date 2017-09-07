@@ -95,8 +95,8 @@ __INTERNAL_LogText() {
       local left=$(( (10+${#prio})/2 ))
       local prefix prefix_colored timestamp
       printf -v timestamp "%(%H:%M:%S)T" -1
-      printf -v prefix_colored ":: [ %s ] :: [%s%*s%*s%s] ::"  $timestamp $COLOR $left "${prio}" $(( 10-$left )) '' $UNCOLOR
-      printf -v prefix ":: [ %s ] :: [%*s%*s] ::"  $timestamp $left "${prio}" $(( 10-$left ))
+      printf -v prefix_colored ":: [ %s ] :: [%s%*s%*s%s] ::"  "$timestamp" "$COLOR" "$left" "${prio}" "$(( 10-$left ))" '' "$UNCOLOR"
+      printf -v prefix ":: [ %s ] :: [%*s%*s] ::"  "$timestamp" "$left" "${prio}" "$(( 10-$left ))"
       MESSAGE="$prefix $MESSAGE"
       MESSAGE_COLORED="$prefix_colored $MESSAGE_COLORED"
     }
