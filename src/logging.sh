@@ -62,23 +62,12 @@ __INTERNAL_LogText() {
       no_file=1
       shift
     }
-    local MESSAGE=${1:-"***BAD BEAKERLIB_HLOG CALL***"}
+    local MESSAGE="${1:-"***BAD BEAKERLIB_HLOG CALL***"}"
+    local MESSAGE_COLORED="${MESSAGE}"
     local prio="$2"
     local LOGFILE=${3:-$OUTPUTFILE}
     local res=0
     local COLOR='' UNCOLOR=''
-    [[ -n "$prio" ]] && {
-      local left=$(( (10+${#prio})/2 ))
-      local prefix
-      printf -v prefix ":: [ %(%H:%M:%S)T ] :: [\${COLOR}%*s%*s\${UNCOLOR}] ::"  -1 $left "${prio}" $(( 10-$left ))
-      MESSAGE="$prefix $MESSAGE"
-    }
-    if [[ -z "$no_file" ]]; then
-      if [[ -n "$LOGFILE" ]]; then
-        eval "echo -e \"${MESSAGE}\"" >> $LOGFILE || let res++
-      fi
-      eval "echo -e \"${MESSAGE}\"" >> "$__INTERNAL_BEAKERLIB_JOURNAL_TXT" || let res++
-    fi
     if [[ -t 2 ]]; then
       UNCOLOR="$__INTERNAL_color_reset"
       case ${prio^^} in
@@ -102,10 +91,23 @@ __INTERNAL_LogText() {
           ;;
       esac
     fi
-    [[ -z "$no_file" ]] && {
-      eval "echo -e \"${MESSAGE}\"" >> "$__INTERNAL_BEAKERLIB_JOURNAL_COLORED" || let res++
+    [[ -n "$prio" ]] && {
+      local left=$(( (10+${#prio})/2 ))
+      local prefix prefix_colored timestamp
+      printf -v timestamp "%(%H:%M:%S)T" -1
+      printf -v prefix_colored ":: [ %s ] :: [%s%*s%*s%s] ::"  $timestamp $COLOR $left "${prio}" $(( 10-$left )) '' $UNCOLOR
+      printf -v prefix ":: [ %s ] :: [%*s%*s] ::"  $timestamp $left "${prio}" $(( 10-$left ))
+      MESSAGE="$prefix $MESSAGE"
+      MESSAGE_COLORED="$prefix_colored $MESSAGE_COLORED"
     }
-    eval "echo -e \"${MESSAGE}\"" >&2 || let res++
+    if [[ -z "$no_file" ]]; then
+      if [[ -n "$LOGFILE" ]]; then
+        echo -e "${MESSAGE}" >> $LOGFILE || let res++
+      fi
+      echo -e "${MESSAGE}" >> "$__INTERNAL_BEAKERLIB_JOURNAL_TXT" || let res++
+      echo -e "${MESSAGE_COLORED}" >> "$__INTERNAL_BEAKERLIB_JOURNAL_COLORED" || let res++
+    fi
+    echo -e "${MESSAGE_COLORED}" >&2 || let res++
     return $res
 }
 
