@@ -33,6 +33,11 @@ import base64
 # TODO fix xml pretty print
 
 
+xmlForbidden = (0,1,2,3,4,5,6,7,8,11,12,14,15,16,17,18,19,20,\
+                21,22,23,24,25,26,27,28,29,30,31,0xFFFE,0xFFFF)
+xmlTrans = dict([(x,None) for x in xmlForbidden])
+
+
 class Stack:
     def __init__(self):
         self.items = []
@@ -139,9 +144,15 @@ def parseLine(line):
 # Returns xml element created with
 # information given as parameters
 def createElement(element, attributes, content):
+    element = unicode(element, 'utf-8', errors='replace').translate(xmlTrans)
     new_el = etree.Element(element)
+
+    content = unicode(content, 'utf-8', errors='replace').translate(xmlTrans)
     new_el.text = content
+
     for key, value in attributes.iteritems():
+        key = unicode(key, 'utf-8', errors='replace').translate(xmlTrans)
+        value = unicode(value, 'utf-8', errors='replace').translate(xmlTrans)
         new_el.set(key, value)
     return new_el
 
@@ -263,7 +274,7 @@ def createJournalXML(options):
 
 def main():
     DESCRIPTION = "Tool creating journal out of metafile."
-    usage = __file__+" --metafile=METAFILE --journal=JOURNAL"
+    usage = __file__ + " --metafile=METAFILE --journal=JOURNAL"
     optparser = OptionParser(description=DESCRIPTION, usage=usage)
 
     optparser.add_option("-j", "--journal", default=None, dest="journal", metavar="JOURNAL")
