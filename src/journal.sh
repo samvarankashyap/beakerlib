@@ -384,6 +384,7 @@ Example:
 =cut
 # call rlJournalPrint
 rlJournalPrintText(){
+    __INTERNAL_PersistentDataLoad
     local __INTERNAL_ENDTIME=$__INTERNAL_TIMESTAMP
     local duration=$(($__INTERNAL_ENDTIME - $__INTERNAL_STARTTIME))
     echo -e "\n\n\n\n"
