@@ -390,7 +390,8 @@ rlJournalPrintText(){
     local textfile
     [[ -t 1 ]] && textfile="$__INTERNAL_BEAKERLIB_JOURNAL_COLORED" || textfile="$__INTERNAL_BEAKERLIB_JOURNAL_TXT"
 
-    cat $textfile | sed -r "s/__INTERNAL_ENDTIME/$(printf "%($__INTERNAL_timeformat)T" $__INTERNAL_ENDTIME)/;s/__INTERNAL_DURATION/$duration seconds/"
+    local sed_patterns="s/__INTERNAL_ENDTIME/$(printf "%($__INTERNAL_timeformat)T" $__INTERNAL_ENDTIME)/;s/__INTERNAL_DURATION/$duration seconds/"
+    cat $textfile | sed -r "$sed_patterns"
 
     local tmp="$__INTERNAL_LogText_no_file"
     __INTERNAL_LogText_no_file=1
@@ -716,7 +717,7 @@ __INTERNAL_CreateHeader(){
             fi
         done < "/proc/cpuinfo"
         __INTERNAL_WriteToMetafile hw_cpu -- "$count x $type"
-        __INTERNAL_LogText "    CPU           : $count x $type" 2> /dev/null
+        __INTERNAL_LogText "    CPUs          : $count x $type" 2> /dev/null
     fi
 
     # RAM size
@@ -730,7 +731,7 @@ __INTERNAL_CreateHeader(){
             fi
         done < "/proc/meminfo"
         __INTERNAL_WriteToMetafile hw_ram -- "$size MB"
-        __INTERNAL_LogText "    Mem           : ${size} MB" 2> /dev/null
+        __INTERNAL_LogText "    RAM size      : ${size} MB" 2> /dev/null
     fi
 
     # HDD size
@@ -744,7 +745,7 @@ __INTERNAL_CreateHeader(){
     [[ -n "$size" ]] && {
         size="$(echo "$((size*100/1024/1024))" | sed -r 's/..$/.\0/') GB"
         __INTERNAL_WriteToMetafile hw_hdd -- "$size"
-        __INTERNAL_LogText "    HDD           : ${size}" 2> /dev/null
+        __INTERNAL_LogText "    HDD size      : ${size}" 2> /dev/null
     }
 
     # Purpose
