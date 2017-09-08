@@ -815,7 +815,7 @@ rlRun() {
     fi
 
     # in case expected exit code is provided as "2-5,26", expand it to "2,3,4,5,26"
-    while echo "$__INTERNAL_rlRun_expected" | grep -q '[0-9]-[0-9]'; do                                      
+    while echo "$__INTERNAL_rlRun_expected" | grep -q '[0-9]-[0-9]'; do
         local __INTERNAL_rlRun_interval=$(echo "$__INTERNAL_rlRun_expected" | sed "s/.*\(\<[0-9]\+-[0-9]\+\>\).*/\1/")
         if [ -z "$__INTERNAL_rlRun_interval" ]; then
             rlLogWarning "rlRun: Something happened when getting interval, using '0-0'"
