@@ -116,6 +116,7 @@ rlJournalStart(){
     __INTERNAL_PHASE_FAILED=()
     __INTERNAL_PHASE_PASSED=()
     __INTERNAL_PHASE_STARTTIME=()
+    __INTERNAL_PHASE_METRICS=()
     export __INTERNAL_PHASE_OPEN=0
 
     if [[ -z "$__INTERNAL_JOURNAL_OPEN" ]]; then
@@ -472,6 +473,7 @@ rljAddPhase(){
       __INTERNAL_PHASE_STARTTIME=( $__INTERNAL_TIMESTAMP )
       __INTERNAL_PHASE_TXTLOG_START=( $(wc -l $__INTERNAL_BEAKERLIB_JOURNAL_TXT) )
       __INTERNAL_PHASE_OPEN=${#__INTERNAL_PHASE_NAME[@]}
+      __INTERNAL_PHASE_METRICS=( "" )
     else
       let __INTERNAL_METAFILE_INDENT_LEVEL+=1
       __INTERNAL_PHASE_TYPE=( "$1" "${__INTERNAL_PHASE_TYPE[@]}" )
@@ -481,6 +483,7 @@ rljAddPhase(){
       __INTERNAL_PHASE_STARTTIME=( $__INTERNAL_TIMESTAMP "${__INTERNAL_PHASE_STARTTIME[@]}" )
       __INTERNAL_PHASE_TXTLOG_START=( $TXTLOG_START "${__INTERNAL_PHASE_TXTLOG_START[@]}" )
       __INTERNAL_PHASE_OPEN=${#__INTERNAL_PHASE_NAME[@]}
+      __INTERNAL_PHASE_METRICS=( "" "${__INTERNAL_PHASE_METRICS[@]}" )
     fi
     __INTERNAL_PersistentDataSave
 }
@@ -540,6 +543,7 @@ rljClosePhase(){
       __INTERNAL_PHASE_PASSED=()
       __INTERNAL_PHASE_STARTTIME=()
       __INTERNAL_PHASE_TXTLOG_START=()
+      __INTERNAL_PHASE_METRICS=()
     else
       let __INTERNAL_METAFILE_INDENT_LEVEL-=1
       unset __INTERNAL_PHASE_TYPE[0]; __INTERNAL_PHASE_TYPE=( "${__INTERNAL_PHASE_TYPE[@]}" )
@@ -550,6 +554,7 @@ rljClosePhase(){
       unset __INTERNAL_PHASE_PASSED[0]; __INTERNAL_PHASE_PASSED=( "${__INTERNAL_PHASE_PASSED[@]}" )
       unset __INTERNAL_PHASE_STARTTIME[0]; __INTERNAL_PHASE_STARTTIME=( "${__INTERNAL_PHASE_STARTTIME[@]}" )
       unset __INTERNAL_PHASE_TXTLOG_START[0]; __INTERNAL_PHASE_TXTLOG_START=( "${__INTERNAL_PHASE_TXTLOG_START[@]}" )
+      unset __INTERNAL_PHASE_METRICS[0]; __INTERNAL_PHASE_METRICS=( "${__INTERNAL_PHASE_METRICS[@]}" )
     fi
     __INTERNAL_PHASE_OPEN=${#__INTERNAL_PHASE_NAME[@]}
     # Updating phase element
@@ -581,17 +586,26 @@ rljAddTest(){
 }
 
 rljAddMetric(){
+    __INTERNAL_PersistentDataLoad
     local MID="$2"
     local VALUE="$3"
     local TOLERANCE=${4:-"0.2"}
+    local res=0
     if [ "$MID" == "" ] || [ "$VALUE" == "" ]
     then
         rlLogError "TEST BUG: Bad call of rlLogMetric"
         return 1
     fi
-    rlLogDebug "rljAddMetric: Storing metric $MID with value $VALUE and tolerance $TOLERANCE"
-    __INTERNAL_WriteToMetafile metric --type "$1" --name "$MID" \
-        --value "$VALUE" --tolerance "$TOLERANCE" >&2
+    if [[ "$__INTERNAL_PHASE_METRICS" =~ \ $MID\  ]]; then
+        rlLogError "$FUNCNAME: Metric name not unique!"
+        let res++
+    else
+        rlLogDebug "rljAddMetric: Storing metric $MID with value $VALUE and tolerance $TOLERANCE"
+        __INTERNAL_PHASE_METRICS="$__INTERNAL_PHASE_METRICS $MID "
+        __INTERNAL_WriteToMetafile metric --type "$1" --name "$MID" \
+            --value "$VALUE" --tolerance "$TOLERANCE" >&2 || let res++
+        __INTERNAL_PersistentDataSave
+    fi
     return $?
 }
 
@@ -822,6 +836,7 @@ declare -p __INTERNAL_PHASE_FAILED >> $__INTERNAL_PRESISTENT_DATA
 declare -p __INTERNAL_PHASE_PASSED >> $__INTERNAL_PRESISTENT_DATA
 declare -p __INTERNAL_PHASE_STARTTIME >> $__INTERNAL_PRESISTENT_DATA
 declare -p __INTERNAL_PHASE_TXTLOG_START >> $__INTERNAL_PRESISTENT_DATA
+declare -p __INTERNAL_PHASE_METRICS >> $__INTERNAL_PRESISTENT_DATA
 }
 
 __INTERNAL_PersistentDataLoad() {
