@@ -53,15 +53,13 @@ Implements also phase support with automatic assert evaluation.
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 __INTERNAL_PrintText() {
-  __INTERNAL_LogText --no-file "$@"
+  local tmp="$__INTERNAL_LogText_no_file"
+  __INTERNAL_LogText_no_file=1
+  __INTERNAL_LogText "$@"
+  __INTERNAL_LogText_no_file=$tmp
 }
 
 __INTERNAL_LogText() {
-    local no_file=''
-    [[ "$1" == "--no-file" ]] && {
-      no_file=1
-      shift
-    }
     local MESSAGE="${1:-"***BAD BEAKERLIB_HLOG CALL***"}"
     local MESSAGE_COLORED="${MESSAGE}"
     local prio="$2"
@@ -100,7 +98,7 @@ __INTERNAL_LogText() {
       MESSAGE="$prefix $MESSAGE"
       MESSAGE_COLORED="$prefix_colored $MESSAGE_COLORED"
     }
-    if [[ -z "$no_file" ]]; then
+    if [[ -z "$__INTERNAL_LogText_no_file" ]]; then
       if [[ -n "$LOGFILE" ]]; then
         echo -e "${MESSAGE}" >> $LOGFILE || let res++
       fi
