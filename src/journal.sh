@@ -675,6 +675,21 @@ __INTERNAL_CreateHeader(){
         __INTERNAL_LogText "    bl-redhat RPM : ${package[0]}" 2> /dev/null
     }
 
+    local test_version="${testversion:-$TESTVERSION}"
+
+    [[ -n "$test_version" ]] && {
+        __INTERNAL_WriteToMetafile testversion -- "$test_version"
+        __INTERNAL_LogText "    Test version  : $test_version" 2> /dev/null
+    }
+
+    package="${packagename:-$test_version}"
+    local test_built
+    [[ -n "$package" ]] && test_built=$(rpm -q --qf '%{BUILDTIME}\n' $package | head -n 1) && {
+      printf -v test_built "%($__INTERNAL_timeformat)T" $test_built
+      __INTERNAL_WriteToMetafile testversion -- "$test_built"
+      __INTERNAL_LogText "    Test built    : $test_built" 2> /dev/null
+    }
+
 
     # Starttime and endtime
     __INTERNAL_WriteToMetafile starttime
