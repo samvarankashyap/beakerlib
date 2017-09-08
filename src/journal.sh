@@ -491,9 +491,9 @@ rljAddPhase(){
 
 __INTERNAL_SET_WORST_PHASE_RESULT() {
     local results='PASS WARN FAIL'
-    [[ "$results" =~ $(echo "$__INTERNAL_PHASES_WORST_RESULT.*") ]] && {
-      local possible_results="$BASH_REMATCH"
-      rlLogDebug "$FUNCNAME(): possible worst results are now $possible_results, current result is $1"
+    [[ "$results" =~ $(echo "$__INTERNAL_PHASES_WORST_RESULT(.*)") ]] && {
+      local possible_results="${BASH_REMATCH[1]}"
+      rlLogDebug "$FUNCNAME(): possible worse results are now $possible_results, current result is $1"
       [[ "$possible_results" =~ $1 ]] && {
           rlLogDebug "$FUNCNAME(): changing worst phase result from $__INTERNAL_PHASES_WORST_RESULT to $1"
           __INTERNAL_PHASES_WORST_RESULT="$1"
