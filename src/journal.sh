@@ -728,7 +728,7 @@ __INTERNAL_CreateHeader(){
     # CPU info
     if [ -f "/proc/cpuinfo" ]; then
         local count=0
-        local type=""
+        local type="unknown"
         local cpu_regex="^model\sname.*: (.*)$"
         while read line; do
             if [[ "$line" =~ $cpu_regex ]]; then
