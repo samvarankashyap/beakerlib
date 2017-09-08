@@ -33,9 +33,9 @@ import base64
 # TODO fix xml pretty print
 
 
-xmlForbidden = (0,1,2,3,4,5,6,7,8,11,12,14,15,16,17,18,19,20,\
-                21,22,23,24,25,26,27,28,29,30,31,0xFFFE,0xFFFF)
-xmlTrans = dict([(x,None) for x in xmlForbidden])
+xmlForbidden = [0, 1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 14, 15, 16, 17, 18, 19, 20,
+                21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 0xFFFE, 0xFFFF]
+xmlTrans = dict([(x, None) for x in xmlForbidden])
 
 
 class Stack:
@@ -197,14 +197,28 @@ def createJournalXML(options):
             # New element is now current element
             previous_el = new_el
 
-        # New element is on the same level as previous one
         elif indent == old_indent:
-            # Previous element has ended so it is appended to the element 1 level above
-            el_stack.peek().append(previous_el)
-            # Creating new element
-            new_el = createElement(element, attributes, content)
-            # New element is now current element
-            previous_el = new_el
+            # Closing element with updates to it with no elements inside it
+            # TODO refactor
+            if element == "":
+                # Updating start and end time
+                starttime, endtime = getStartEndTime(previous_el)
+                # If the closing element has a --timestamp, this value will be used as endtime
+                if "timestamp" in attributes:
+                    endtime = attributes["timestamp"]
+                # Updating attributes found on closing line
+                for key, value in attributes.iteritems():
+                    previous_el.set(key, value)
+                # add start/end time and remove timestamp attribute
+                addStartEndTime(previous_el, starttime, endtime)
+            # New element is on the same level as previous one
+            else:
+                # Previous element has ended so it is appended to the element 1 level above
+                el_stack.peek().append(previous_el)
+                # Creating new element
+                new_el = createElement(element, attributes, content)
+                # New element is now current element
+                previous_el = new_el
 
         # New element is on higher level than previous one
         elif indent < old_indent:
