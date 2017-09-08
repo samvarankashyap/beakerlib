@@ -648,6 +648,11 @@ __INTERNAL_CreateHeader(){
 
     __INTERNAL_PrintHeadLog "TEST PROTOCOL" 2> /dev/null
 
+    [[ -n "$TESTID" ]] && {
+        __INTERNAL_WriteToMetafile test_id -- "$TESTID"
+        __INTERNAL_LogText "    Test run ID   : $TESTID" 2> /dev/null
+    }
+
     # Determine package which is tested
     local package=$(__INTERNAL_DeterminePackage)
     __INTERNAL_WriteToMetafile package -- "$package"
