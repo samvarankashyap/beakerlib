@@ -222,7 +222,8 @@ def createJournalXML(options):
                 starttime, endtime = getStartEndTime(previous_el)
                 addStartEndTime(previous_el, starttime, endtime)
                 # Appending previous element to the element 1 level above
-                el_stack.peek().append(previous_el)
+                if el_stack.items:
+                    el_stack.peek().append(previous_el)
 
                 new_el = createElement(element, attributes, content)
                 previous_el = new_el
@@ -234,9 +235,8 @@ def createJournalXML(options):
     for _ in el_stack.items:
         el_stack.peek().append(previous_el)
         previous_el = el_stack.pop()
-
-    # Appending previous element to the element 1 level above
-    el_stack.peek().append(previous_el)
+    if el_stack.items:
+        el_stack.peek().append(previous_el)
 
     # Updating start and end time of last opened paired element(log)
     starttime, endtime = getStartEndTime(previous_el)
