@@ -1105,6 +1105,14 @@ Ales Zelinka <azelinka@redhat.com>
 
 Petr Splichal <psplicha@redhat.com>
 
+=item *
+
+Dalibor Pospisil <dapospis@redhat.com>
+
+=item *
+
+Jakub Heger <jheger@redhat.com>
+
 =back
 
 =cut
