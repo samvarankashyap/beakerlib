@@ -202,7 +202,7 @@ rlJournalEnd(){
     fi
 
     if [ -n "$TESTID" ] ; then
-        rlJournalWriteXML
+        __INTERNAL_JournalXMLCreate
         $BEAKERLIB_COMMAND_SUBMIT_LOG -T $TESTID -l $BEAKERLIB_JOURNAL \
         || rlLogError "rlJournalEnd: Submit wasn't successful"
     else
@@ -212,33 +212,33 @@ rlJournalEnd(){
     fi
 
     echo "#End of metafile" >> $BEAKERLIB_METAFILE
-    rlJournalWriteXML
+    __INTERNAL_JournalXMLCreate
 }
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# rlJournalWriteXML
+# __INTERNAL_JournalXMLCreate
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-: <<'=cut'
-=pod
+#: <<'=cut'
+#=pod
+#
+#=head3 __INTERNAL_JournalXMLCreate
+#
+#Create XML version of the journal from internal structure.
+#
+#    __INTERNAL_JournalXMLCreate [--xslt file]
+#
+#=over
+#
+#=item --xslt file
+#
+#Use xslt file to generate different journal format, e.g xUnit.
+#
+#=back
+#
+#=cut
 
-=head3 rlJournalWriteXML
-
-Create XML version of the journal from internal structure.
-
-    rlJournalWriteXML [--xslt file]
-
-=over
-
-=item --xslt file
-
-Use xslt file to generate different journal format, e.g xUnit.
-
-=back
-
-=cut
-
-rlJournalWriteXML() {
+__INTERNAL_JournalXMLCreate() {
     local xslt=''
     [[ "$1" == "--xslt" ]] && [[ -r "$2" ]] && xslt="$1 $2"
     $__INTERNAL_JOURNALIST $xslt --metafile "$BEAKERLIB_METAFILE" --journal "$BEAKERLIB_JOURNAL"
@@ -256,13 +256,6 @@ rlJournalWriteXML() {
 Print the content of the journal in pretty xml format.
 
     rlJournalPrint [type]
-
-This function is now deprecated due to journal rewrite and will be removed in
-some of the future versions.
-
-To achieve the pretty output call rlJournalWriteXML and `cat $BEAKERLIB_JOURNAL | xmllint --format - `.
-To achieve the raw output call rlJournalWriteXML and `cat $BEAKERLIB_JOURNAL`.
-
 
 =over
 
@@ -309,9 +302,12 @@ Example:
 
 # cat generated text version
 rlJournalPrint(){
-    rlLogWarning "$FUNCNAME(): this function was deprecated by the journal rewrite and will be removed in some of the future versions."
-    rlLogInfo "$FUNCNAME(): to achieve the pretty output call rlJournalWriteXML and cat \$BEAKERLIB_JOURNAL | xmllint --format -"
-    rlLogInfo "$FUNCNAME(): to achieve the raw output call rlJournalWriteXML and cat \$BEAKERLIB_JOURNAL"
+  __INTERNAL_JournalXMLCreate
+  if [[ "$1" == "raw" ]]; then
+    cat $BEAKERLIB_JOURNAL
+  else
+    cat $BEAKERLIB_JOURNAL | xmllint --format -
+  fi
 }
 
 # backward compatibility
