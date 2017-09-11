@@ -165,7 +165,7 @@ def createJournalXML(options):
     if options.metafile:
         try:
             fh = open(options.metafile, 'r+')
-        except IOError as e:
+        except IOError, e:
             sys.stderr.write('Failed to open queue file with' + str(e), 'FAIL')
             return 1
 
