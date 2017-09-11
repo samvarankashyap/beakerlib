@@ -92,7 +92,8 @@ __INTERNAL_LogText() {
     [[ -n "$prio" ]] && {
       local left=$(( (10+${#prio})/2 ))
       local prefix prefix_colored timestamp
-      printf -v timestamp "%(%H:%M:%S)T" -1
+      __INTERNAL_SET_TIMESTAMP
+      printf -v timestamp "%($__INTERNAL_TIMEFORMAT_SHORT)T" "$__INTERNAL_TIMESTAMP"
       printf -v prefix_colored ":: [ %s ] :: [%s%*s%*s%s] ::"  "$timestamp" "$COLOR" "$left" "${prio}" "$(( 10-$left ))" '' "$UNCOLOR"
       printf -v prefix ":: [ %s ] :: [%*s%*s] ::"  "$timestamp" "$left" "${prio}" "$(( 10-$left ))"
       MESSAGE="$prefix $MESSAGE"

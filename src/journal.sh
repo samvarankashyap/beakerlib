@@ -45,7 +45,10 @@ printing journal contents.
 =cut
 
 __INTERNAL_JOURNALIST=beakerlib-journalling
-__INTERNAL_timeformat="%Y-%m-%d %H:%M:%S %Z"
+__INTERNAL_TIMEFORMAT_TIME="%H:%M:%S"
+__INTERNAL_TIMEFORMAT_DATE_TIME="%Y-%m-%d %H:%M:%S %Z"
+__INTERNAL_TIMEFORMAT_SHORT="$__INTERNAL_TIMEFORMAT_TIME"
+__INTERNAL_TIMEFORMAT_LONG="$__INTERNAL_TIMEFORMAT_DATE_TIME"
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -68,7 +71,8 @@ functionality.
 =cut
 
 rlJournalStart(){
-    printf -v __INTERNAL_STARTTIME "%(%s)T" -1
+    __INTERNAL_SET_TIMESTAMP
+    __INTERNAL_STARTTIME="$__INTERNAL_TIMESTAMP"
     # test-specific temporary directory for journal/metadata
     if [ -n "$BEAKERLIB_DIR" ]; then
         # try user-provided temporary directory first
@@ -201,6 +205,10 @@ rlJournalEnd(){
       local BEAKERLIB_COMMAND_SUBMIT_LOG="$__INTERNAL_DEFAULT_SUBMIT_LOG"
     fi
 
+    __INTERNAL_SET_TIMESTAMP
+    __INTERNAL_ENDTIME=$__INTERNAL_TIMESTAMP
+    __INTERNAL_update_journal_txt
+
     if [ -n "$TESTID" ] ; then
         __INTERNAL_JournalXMLCreate
         $BEAKERLIB_COMMAND_SUBMIT_LOG -T $TESTID -l $BEAKERLIB_JOURNAL \
@@ -317,6 +325,19 @@ rlPrintJournal() {
 }
 
 
+__INTERNAL_update_journal_txt() {
+  local textfile
+  local duration=$(($__INTERNAL_TIMESTAMP - $__INTERNAL_STARTTIME))
+  local endtime=""
+  [[ -n "$__INTERNAL_ENDTIME" ]] && printf -v endtime "%($__INTERNAL_TIMEFORMAT_LONG)T" $__INTERNAL_ENDTIME
+  local sed_patterns="0,/    Test finished : /s/^(    Test finished : ).*\$/\1$endtime/;0,/    Test duration : /s/^(    Test duration : ).*\$/\1$duration seconds/"
+  for textfile in "$__INTERNAL_BEAKERLIB_JOURNAL_COLORED" "$__INTERNAL_BEAKERLIB_JOURNAL_TXT"; do
+    sed -r -i "$sed_patterns" "$textfile"
+  done
+
+}
+
+
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # rlJournalPrintText
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -381,14 +402,12 @@ Example:
 # call rlJournalPrint
 rlJournalPrintText(){
     __INTERNAL_PersistentDataLoad
-    local __INTERNAL_ENDTIME=$__INTERNAL_TIMESTAMP
-    local duration=$(($__INTERNAL_ENDTIME - $__INTERNAL_STARTTIME))
+    __INTERNAL_update_journal_txt
+
     echo -e "\n\n\n\n"
     local textfile
     [[ -t 1 ]] && textfile="$__INTERNAL_BEAKERLIB_JOURNAL_COLORED" || textfile="$__INTERNAL_BEAKERLIB_JOURNAL_TXT"
-
-    local sed_patterns="s/__INTERNAL_ENDTIME/$(printf "%($__INTERNAL_timeformat)T" $__INTERNAL_ENDTIME)/;s/__INTERNAL_DURATION/$duration seconds/"
-    cat $textfile | sed -r "$sed_patterns"
+    cat "$textfile"
 
     local tmp="$__INTERNAL_LogText_no_file"
     __INTERNAL_LogText_no_file=1
@@ -522,7 +541,8 @@ rljClosePhase(){
     local name="$__INTERNAL_PHASE_NAME"
 
     rlLogDebug "rljClosePhase: Phase $name closed"
-    local endtime; printf -v endtime "%(%s)T" -1
+    __INTERNAL_SET_TIMESTAMP
+    local endtime="$__INTERNAL_TIMESTAMP"
     __INTERNAL_LogText "________________________________________________________________________________"
     __INTERNAL_LogText "Duration: $((endtime - __INTERNAL_PHASE_STARTTIME))s" LOG
     __INTERNAL_LogText "Assertions: $__INTERNAL_PHASE_PASSED good, $__INTERNAL_PHASE_FAILED bad" LOG
@@ -683,7 +703,7 @@ __INTERNAL_CreateHeader(){
     local test_built
     [[ -n "$package" ]] && test_built=$(rpm -q --qf '%{BUILDTIME}\n' $package) && {
       test_built="$(ehco "$test_built" | head -n 1 )"
-      printf -v test_built "%($__INTERNAL_timeformat)T" "$test_built"
+      printf -v test_built "%($__INTERNAL_TIMEFORMAT_LONG)T" "$test_built"
       __INTERNAL_WriteToMetafile testversion -- "$test_built"
       __INTERNAL_LogText "    Test built    : $test_built" 2> /dev/null
     }
@@ -692,9 +712,9 @@ __INTERNAL_CreateHeader(){
     # Starttime and endtime
     __INTERNAL_WriteToMetafile starttime
     __INTERNAL_WriteToMetafile endtime
-    __INTERNAL_LogText "    Test started  : $(printf "%($__INTERNAL_timeformat)T" $__INTERNAL_STARTTIME)" 2> /dev/null
-    __INTERNAL_LogText "    Test finished : __INTERNAL_ENDTIME" 2> /dev/null
-    __INTERNAL_LogText "    Test duration : __INTERNAL_DURATION" 2> /dev/null
+    __INTERNAL_LogText "    Test started  : $(printf "%($__INTERNAL_TIMEFORMAT_LONG)T" $__INTERNAL_STARTTIME)" 2> /dev/null
+    __INTERNAL_LogText "    Test finished : " 2> /dev/null
+    __INTERNAL_LogText "    Test duration : " 2> /dev/null
 
     # Test name
     TEST="${TEST:-unknown}"
@@ -780,12 +800,17 @@ __INTERNAL_CreateHeader(){
 }
 
 
+__INTERNAL_SET_TIMESTAMP() {
+    printf -v __INTERNAL_TIMESTAMP '%(%s)T' -1
+}
+
+
 # Encode arguments' values into base64
 # Adds --timestamp argument and indent
 # writes it into metafile
 # takes [element] --attribute1 value1 --attribute2 value2 .. [-- "content"]
 __INTERNAL_WriteToMetafile(){
-    printf -v __INTERNAL_TIMESTAMP '%(%s)T' -1
+    __INTERNAL_SET_TIMESTAMP
     local indent
     local line=""
     local lineraw=''
